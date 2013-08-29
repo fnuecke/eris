@@ -5,7 +5,7 @@ First things first: this is essentially a rewrite of [Pluto][]. If you need some
 
 Although my implementation is strongly influenced by Pluto, in my humble opinion there are still sufficient changes in the architecture that a new name is appropriate. So, to stick with the theme, I named it Eris. Note that all those changes are internal. The API is almost left untouched to make a transition easier.
 
-Eris it can serialize almost anything you can have in a Lua VM and can unserialize it again at a later point, even in a different VM. This in particular includes yielded coroutines, which is very handy for saving long running, multi-session scripting systems, for example in games: just persist the state into the save file and unpersist it upon load, and the scripts won't even know the game was quit inbetween.
+Eris can serialize almost anything you can have in a Lua VM and can unserialize it again at a later point, even in a different VM. This in particular includes yielded coroutines, which is very handy for saving long running, multi-session scripting systems, for example in games: just persist the state into the save file and unpersist it upon load, and the scripts won't even know the game was quit inbetween.
 
 Eris currently requires Lua 5.2.2. It may build with earlier 5.2.x versions, but I have not tried it.
 
@@ -24,9 +24,9 @@ C API
 
 Like Pluto, Eris offers two functions to persist to or read from an arbitrary source. Eris uses the Lua typedefs `lua_Writer` and `lua_Reader` for this purpose, the replacements of `lua_Chunkwriter` and `lua_Chunkreader` used by Pluto.
 
-* <span style="float:right">`[-0, +0, e]`</span>
+* <code style="float:right">[-0, +0, e]</code>
   `void eris_dump(lua_State* L, lua_Writer writer, void* ud);`  
-  This provides an interface to Eris' persist functionality for writing in an arbitrary way, using a writer. Whenever Eris needs to store data it will call the provided writer function with the data to write, and the specified `ud`.  When called, the stack in `L` must look like this:
+  This provides an interface to Eris' persist functionality for writing in an arbitrary way, using a writer. When called, the stack in `L` must look like this:
   1. `perms[table]`
   2. `value[any]`  
 
@@ -34,24 +34,24 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
   This function is equivalent to `pluto_persist`.
 
-* <span style="float:right">`[-0, +1, e]`</span>
+* <code style="float:right">[-0, +1, e]</code>
   `void eris_undump(lua_State* L, lua_Reader reader, void* ud);`  
-  This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. Whenever Eris needs to read data it will call the provided reader function with the specified `ud`. Note: like Pluto, Eris uses Lua's own ZIO to handle buffered reading. When called, the stack in `L` must look like this:
+  This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. When called, the stack in `L` must look like this:
   1. `perms[table]`  
 
   That is, `perms` must be a table at stack position 1. This table is used as the permanent objcet table. This must hold the inverse mapping present in the permanent object table used when persisting. `reader` is the reader function used to read all data, `ud` is passed to the reader function whenever it is called. The result of the operation will be pushed onto the stack.
 
-  This function is equivalent to `pluto_unpersist`. Note that unlike with Pluto, the value can in fact be `nil`. The function will only check the stack's top.
+  This function is equivalent to `pluto_unpersist`. The function will only check the stack's top. Like Pluto, Eris uses Lua's own ZIO to handle buffered reading. Note that unlike with Pluto, the value can in fact be `nil`.
 
 In addition to these, Eris also offers two more convenient functions, if you simply wish to persist an object to a string. These behave like the functions exposed to Lua.
 
-* <span style="float:right">`[-0, +1, e]`</span>
+* <code style="float:right">[-0, +1, e]</code>
   `void eris_persist(lua_State* L, int perms, int value);`  
-  It expects the permanent object table at the specified index `perms` and the value to persist at the specified index `value`. It will push the resulting string onto the stack on success.
+  It expects the permanent object table at the specified index `perms` and the value to persist at the specified index `value`. It will push the resulting binary string onto the stack on success.
 
-* <span style="float:right">`[-0, +1, e]`</span>
+* <code style="float:right">[-0, +1, e]</code>
   `void eris_unpersist(lua_State* L, int perms, int value);`  
-  It expects the permanent object table at the specified index `perms` and the string containing persisted data at the specified index `value`. It will push the resulting value onto the stack on success.
+  It expects the permanent object table at the specified index `perms` and the binary string containing persisted data at the specified index `value`. It will push the resulting value onto the stack on success.
 
 The subtle name change from Pluto was done because Lua's own dump/undump works with a writer/reader, so it felt more consistent this way.
 
@@ -72,9 +72,11 @@ Concepts
 Persistence
 -----------
 
-Eris will persist most objects out of the box. This includes basic value types (nil, boolean, light userdata (as the literal pointer value), number) as well as strings, tables, closures and threads. For tables and userdata, metatables are also persisted. Tables are persisted recursively, i.e. each value referenced in a table will in turn be persisted. C closures are only supported if the underlying C function is in the permanent object table.
+Eris will persist most objects out of the box. This includes basic value types (nil, boolean, light userdata (as the literal pointer value), number) as well as strings, tables, closures and threads. For tables and userdata, metatables are also persisted. Tables, functions and threads are persisted recursively, i.e. each value referenced in them (key/value, upvalue, stack) will in turn be persisted.
 
-Like Pluto, Eris will store complex objects only once and reference this first occasion whenever the object should be persisted again. This ensures that references are kept across persisting an object, and has the nice side effect of keeping the size of the output small.
+C closures are only supported if the underlying C function is in the permanent object table. Userdata is only supported if the special persistence metafield is present (see below).
+
+Like Pluto, Eris will store objects only once and reference this first occasion whenever the object should be persisted again. This ensures that references are kept across persisting an object, and has the nice side effect of keeping the size of the output small.
 
 Permanent Objects
 -----------------
@@ -138,7 +140,7 @@ Limitations
 Core library
 ============
 
-You will notice that I decided to bundle this with Lua 5.2.2 directly, instead of as a standalone library. This is in part due to how deeply Eris has to interact with Lua. As mentioned above, it has to manually create internal data structures and populate them. Later versions of Pluto worked around this by extracting the used internal functions and only bundling those with the library. I decided against this for now, since with Lua 5.2 there's another thing that I need access to: the internally used C resume functions, used for yieldable C calls in the libraries (e.g. `pcall`). I had to patch the library sources by adding a function that pushed these C functions to the table with permanent values. These patches are very unintrusive: they just add a couple of lines to the end of the relevant library files. This means it is possible to persist a yielded `pcall` out of the box.
+You will notice that I decided to bundle this with Lua 5.2.2 directly, instead of as a standalone library. This is in part due to how deeply Eris has to interact with Lua. It has to manually create internal data structures and populate them. Later versions of Pluto worked around this by extracting the used internal functions and only bundling those with the library. I decided against this for now, since with Lua 5.2 there's another thing that I need access to: the internally used C resume functions, used for yieldable C calls in the libraries (e.g. `pcall`). I had to patch the library sources by adding a function that pushed these C functions to the table with permanent values. These patches are very unintrusive: they just add a couple of lines to the end of the relevant library files. This means it is possible to persist a yielded `pcall` out of the box.
 
 Testing
 =======
@@ -151,14 +153,14 @@ Differences to Pluto
 Quite obviously most design choices were taken from Pluto, partially to make it easier to migrate for people already familiar with Pluto, largely because they are pretty good as they are. There are some minute differences however.
 
 * The resulting persisted data, while using the same basic idea, is structured slightly differently.
-* On the C side, eris provides two functions, `eris_persist` and `eris_unpersist` which work on with the stack, so you don't have to write your own `lua_Writer`/`lua_Reader` implementation.
-* Better error reporting. When debugging, I recommend enabling `generatePath` (directly in the code until I decide how to best pass these options along). This will result in all error messages containing a "path" that specified where in the object the error occurred. For example:
+* On the C side, Eris provides two new functions, `eris_persist` and `eris_unpersist` which work on with the stack, so you don't have to write your own `lua_Writer`/`lua_Reader` implementation.
+* Better error reporting. When debugging, I recommend enabling `generatePath` (directly in the code until I decide how to best pass these options along). This will result in all error messages containing a "path" that specifies where in the object the error occurred. For example:
   ```lua
   > eris.persist({
-  >> good = true,
-  >> [false] = setmetatable({}, {
-  >>   __index = setmetatable({}, {__persist = false})
-  >> })})
+      good = true,
+      [false] = setmetatable({}, {
+        __index = setmetatable({}, {__persist = false})
+      })})
   stdin:1: attempt to persist forbidden table (root[false]@metatable.__index)
   ```
   This is disabled per default due to the additional processing and memory overhead.
