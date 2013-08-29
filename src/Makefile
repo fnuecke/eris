@@ -1,5 +1,4 @@
-# Makefile for building Lua
-# See ../doc/readme.html for installation and customization instructions.
+# Makefile for building Lua+Eris, based on the original Lua Makefile.
 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
@@ -22,7 +21,7 @@ SYSLIBS=
 MYCFLAGS=
 MYLDFLAGS=
 MYLIBS=
-MYOBJS=
+MYOBJS=eris.o
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
@@ -184,4 +183,5 @@ lvm.o: lvm.c lua.h luaconf.h ldebug.h lstate.h lobject.h llimits.h ltm.h \
  lzio.h lmem.h ldo.h lfunc.h lgc.h lopcodes.h lstring.h ltable.h lvm.h
 lzio.o: lzio.c lua.h luaconf.h llimits.h lmem.h lstate.h lobject.h ltm.h \
  lzio.h
-
+eris.o: eris.c lua.h lauxlib.h lualib.h ldebug.h ldo.h lfunc.h lobject.h \
+ lstate.h lstring.h lzio.h eris.h

@@ -153,3 +153,19 @@ LUAMOD_API int luaopen_coroutine (lua_State *L) {
   return 1;
 }
 
+
+void eris_permcorolib(lua_State *L, int forUnpersist) {
+  luaL_checktype(L, -1, LUA_TTABLE);
+  luaL_checkstack(L, 2, NULL);
+
+  if (forUnpersist) {
+    lua_pushstring(L, "__eris.corolib_luaB_auxwrap");
+    lua_pushcfunction(L, luaB_auxwrap);
+  }
+  else {
+    lua_pushcfunction(L, luaB_auxwrap);
+    lua_pushstring(L, "__eris.corolib_luaB_auxwrap");
+  }
+  lua_rawset(L, -3);
+}
+

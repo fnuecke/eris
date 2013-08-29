@@ -396,3 +396,6 @@ LUAMOD_API int luaopen_debug (lua_State *L) {
   return 1;
 }
 
+lua_Hook eris_dblib_hookf() {
+  return hookf;
+}
