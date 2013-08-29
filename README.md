@@ -1,3 +1,4 @@
-This is the vanilla Lua 5.2 code, as retrievable from http://www.lua.org/
+Eris - It's like Pluto, but for Lua 5.2.2
+=========================================
 
-The master is based on this to make upgrading to new Lua versions easier (hopefully).
+Documentation following shortly.
