@@ -60,7 +60,7 @@ LUA_API void eris_dump(lua_State* L, lua_Writer writer, void* ud);
 LUA_API void eris_undump(lua_State* L, lua_Reader reader, void* ud);
 
 /**
- * This is a stack-based alternative to eris_persistto.
+ * This is a stack-based alternative to eris_dump.
  *
  * It expects the perms table at the specified index 'perms' and the value to
  * persist at the specified index 'value'. It will push the resulting string
@@ -71,7 +71,7 @@ LUA_API void eris_undump(lua_State* L, lua_Reader reader, void* ud);
 LUA_API void eris_persist(lua_State* L, int perms, int value);
 
 /**
- * This is a stack-based alternative to eris_unpersistfrom.
+ * This is a stack-based alternative to eris_undump.
  *
  * It expects the perms table at the specified index 'perms' and the string
  * containing persisted data at the specified index 'value'. It will push the
@@ -89,13 +89,15 @@ LUA_API void eris_unpersist(lua_State* L, int perms, int value);
 
 /**
  * This pushes a table with the two functions 'persist' and 'unpersist':
- *   string persist(perms, value)
+ *   string persist([perms,] value)
  *     Where 'perms' is a table with "permanent" objects and 'value' is the
  *     value that should be persisted. Returns the string with persisted data.
+ *     If only one value is given, the perms table is assumed to be empty.
  *
- *   table unpersist(perms, value)
+ *   any unpersist([perms,] value)
  *     Where 'perms' is a table with the inverse mapping as used when
  *     persisting the data via persist() and 'value' is the string with the
  *     persisted data returned by persist(). Returns the unpersisted value.
+ *     If only one value is given, the perms table is assumed to be empty.
  */
 LUA_API int luaopen_eris(lua_State* L);
