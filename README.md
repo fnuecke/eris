@@ -1,4 +1,3 @@
-eris
-====
+This is the vanilla Lua 5.2 code, as retrievable from http://www.lua.org/
 
-  Heavy Duty Persistence for Lua 5.2
+The master is based on this to make upgrading to new Lua versions easier (hopefully).
