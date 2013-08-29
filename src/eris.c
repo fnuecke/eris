@@ -126,7 +126,6 @@ extern void eris_permcorolib(lua_State *L, int forUnpersist);
 extern void eris_permloadlib(lua_State *L, int forUnpersist);
 extern void eris_permiolib(lua_State *L, int forUnpersist);
 extern void eris_permstrlib(lua_State *L, int forUnpersist);
-extern lua_Hook eris_dblib_hookf();
 
 /* Utility macro for populating the perms table with internal C functions. */
 #define populateperms(L, forUnpersist) {\
