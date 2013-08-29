@@ -1,7 +1,7 @@
-Eris - Heavy Duty Persistence for Lua 5.2
-=========================================
+Eris - Heavy Duty Persistence for Lua
+=====================================
 
-First things first: this is essentially a rewrite of [Pluto][]. If you need something like this for Lua 5.1 I strongly suggest you have a look at that. In fact, have a look at it anyway, because the documentation isn't half bad, and a lot of it applies to Eris, too.
+First things first: this is essentially a rewrite of [Pluto][], targeting Lua 5.2. If you need something like this for Lua 5.1 I strongly suggest you have a look at that. In fact, have a look at it anyway, because the documentation isn't half bad, and a lot of it applies to Eris, too.
 
 Although my implementation is strongly influenced by Pluto, in my humble opinion there are still sufficient changes in the architecture that a new name is appropriate. So, to stick with the theme, I named it Eris. Note that all those changes are internal. The API is almost left untouched to make a transition easier.
 
@@ -24,8 +24,7 @@ C API
 
 Like Pluto, Eris offers two functions to persist to or read from an arbitrary source. Eris uses the Lua typedefs `lua_Writer` and `lua_Reader` for this purpose, the replacements of `lua_Chunkwriter` and `lua_Chunkreader` used by Pluto.
 
-* <code style="float:right">[-0, +0, e]</code>
-  `void eris_dump(lua_State* L, lua_Writer writer, void* ud);`  
+* `void eris_dump(lua_State* L, lua_Writer writer, void* ud);` `[-0, +0, e]`  
   This provides an interface to Eris' persist functionality for writing in an arbitrary way, using a writer. When called, the stack in `L` must look like this:
   1. `perms[table]`
   2. `value[any]`  
@@ -34,8 +33,7 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
   This function is equivalent to `pluto_persist`.
 
-* <code style="float:right">[-0, +1, e]</code>
-  `void eris_undump(lua_State* L, lua_Reader reader, void* ud);`  
+* `void eris_undump(lua_State* L, lua_Reader reader, void* ud);` `[-0, +1, e]`  
   This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. When called, the stack in `L` must look like this:
   1. `perms[table]`  
 
@@ -45,12 +43,10 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
 In addition to these, Eris also offers two more convenient functions, if you simply wish to persist an object to a string. These behave like the functions exposed to Lua.
 
-* <code style="float:right">[-0, +1, e]</code>
-  `void eris_persist(lua_State* L, int perms, int value);`  
+* `void eris_persist(lua_State* L, int perms, int value);` `[-0, +1, e]`  
   It expects the permanent object table at the specified index `perms` and the value to persist at the specified index `value`. It will push the resulting binary string onto the stack on success.
 
-* <code style="float:right">[-0, +1, e]</code>
-  `void eris_unpersist(lua_State* L, int perms, int value);`  
+* `void eris_unpersist(lua_State* L, int perms, int value);` `[-0, +1, e]`  
   It expects the permanent object table at the specified index `perms` and the binary string containing persisted data at the specified index `value`. It will push the resulting value onto the stack on success.
 
 The subtle name change from Pluto was done because Lua's own dump/undump works with a writer/reader, so it felt more consistent this way.
