@@ -155,12 +155,13 @@ Quite obviously most design choices were taken from Pluto, partially to make it 
 * The resulting persisted data, while using the same basic idea, is structured slightly differently.
 * On the C side, Eris provides two new functions, `eris_persist` and `eris_unpersist` which work on with the stack, so you don't have to write your own `lua_Writer`/`lua_Reader` implementation.
 * Better error reporting. When debugging, I recommend enabling `generatePath` (directly in the code until I decide how to best pass these options along). This will result in all error messages containing a "path" that specifies where in the object the error occurred. For example:
+
   ```lua
   > eris.persist({
-      good = true,
-      [false] = setmetatable({}, {
-        __index = setmetatable({}, {__persist = false})
-      })})
+  >> good = true,
+  >> [false] = setmetatable({}, {
+  >>   __index = setmetatable({}, {__persist = false})
+  >> })})
   stdin:1: attempt to persist forbidden table (root[false]@metatable.__index)
   ```
   This is disabled per default due to the additional processing and memory overhead.
