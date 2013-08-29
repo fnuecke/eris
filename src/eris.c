@@ -1771,6 +1771,8 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
   pi.writer = writer;
   pi.ud = ud;
 
+  eris_checkstack(L, 2);
+
   lua_newtable(L);                              /* perms buff? rootobj reftbl */
   lua_insert(L, 2);                             /* perms reftbl buff? rootobj */
   if (generatePath) {
@@ -1798,6 +1800,8 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
   upi.L = L;
   upi.refcount = 0;
   eris_init(L, &upi.zio, reader, ud);
+
+  eris_checkstack(L, 3);
 
   lua_newtable(L);                                       /* perms str? reftbl */
   lua_insert(L, 2);                                      /* perms reftbl str? */
