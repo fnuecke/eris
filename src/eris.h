@@ -34,7 +34,8 @@ THE SOFTWARE.
  * an arbitrary way, using a writer.
  *
  * When called, the stack in 'L' must look like this:
- * 1: perms[table], 2: value[any]
+ * 1: perms:table
+ * 2: value:any
  *
  * 'writer' is the writer function used to store all data, 'ud' is passed to
  * the writer function whenever it is called.
@@ -48,7 +49,7 @@ LUA_API void eris_dump(lua_State* L, lua_Writer writer, void* ud);
  * in an arbitrary way, using a reader.
  *
  * When called, the stack in 'L' must look like this:
- * 1: perms[table]
+ * 1: perms:table
  *
  * 'reader' is the reader function used to read all data, 'ud' is passed to
  * the reader function whenever it is called.
@@ -89,12 +90,12 @@ LUA_API void eris_unpersist(lua_State* L, int perms, int value);
 
 /**
  * This pushes a table with the two functions 'persist' and 'unpersist':
- *   string persist([perms,] value)
+ *   persist([perms,] value)
  *     Where 'perms' is a table with "permanent" objects and 'value' is the
  *     value that should be persisted. Returns the string with persisted data.
  *     If only one value is given, the perms table is assumed to be empty.
  *
- *   any unpersist([perms,] value)
+ *   unpersist([perms,] value)
  *     Where 'perms' is a table with the inverse mapping as used when
  *     persisting the data via persist() and 'value' is the string with the
  *     persisted data returned by persist(). Returns the unpersisted value.
