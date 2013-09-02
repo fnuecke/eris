@@ -23,9 +23,14 @@ THE SOFTWARE.
 
 /* Standard library headers. */
 #include <assert.h>
-#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+/* Not using stdbool because Visual Studio lives in the past... */
+typedef int bool;
+#define false 0
+#define true 1
 
 /* Mark us as part of the Lua core to get access to what we need. */
 #define LUA_CORE
@@ -60,12 +65,12 @@ static const char *persistKey = "__persist";
 
 /* Whether to persist debug information such as line numbers and upvalue and
  * local variable names. */
-static lu_byte writeDebugInformation = 1;
+static bool writeDebugInformation = 1;
 
 /* Whether to pass the IO object (reader/writer) to the special function
  * defined in the metafield or not. This is disabled per default because it
  * mey allow Lua scripts to do more than they should. Enable this as needed. */
-static lu_byte passIOToPersist = 0;
+static bool passIOToPersist = 0;
 
 /* Generate a human readable "path" that is shown together with error messages
  * to indicate where in the object the error occurred. For example:
@@ -73,7 +78,7 @@ static lu_byte passIOToPersist = 0;
  * Will produce: main:1: attempt to persist forbidden table (root.bad)
  * This can be used for debugging, but is disabled per default due to the
  * processing and memory overhead this introduces. */
-static lu_byte generatePath = 0;
+static bool generatePath = 0;
 
 /*
 ** ============================================================================
@@ -121,11 +126,11 @@ static lu_byte generatePath = 0;
 
 /* Functions in Lua libraries used to access C functions we need to add to the
  * permanents table to fully support yielded coroutines. */
-extern void eris_permbaselib(lua_State *L, int forUnpersist);
-extern void eris_permcorolib(lua_State *L, int forUnpersist);
-extern void eris_permloadlib(lua_State *L, int forUnpersist);
-extern void eris_permiolib(lua_State *L, int forUnpersist);
-extern void eris_permstrlib(lua_State *L, int forUnpersist);
+extern void eris_permbaselib(lua_State *L, bool forUnpersist);
+extern void eris_permcorolib(lua_State *L, bool forUnpersist);
+extern void eris_permloadlib(lua_State *L, bool forUnpersist);
+extern void eris_permiolib(lua_State *L, bool forUnpersist);
+extern void eris_permstrlib(lua_State *L, bool forUnpersist);
 
 /* Utility macro for populating the perms table with internal C functions. */
 #define populateperms(L, forUnpersist) {\
@@ -173,7 +178,7 @@ extern void eris_permstrlib(lua_State *L, int forUnpersist);
 #define eris_ifassert(e) e
 #else
 #define eris_assert(c) ((void)0)
-#define eris_ifassert(e) /* nothing */
+#define eris_ifassert(e) ((void)0)
 #endif
 
 /* State information when persisting an object. */
@@ -354,20 +359,19 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
  * types (i.e. the ones we need). It's just a choice of style. */
 #define READ_VALUE_T(type) static type read_##type(UnpersistInfo *upi) {\
   type r; READ(&r, 1, type); return r; }
-READ_VALUE_T(lu_byte);
-READ_VALUE_T(short);
-READ_VALUE_T(ushort);
+READ_VALUE_T(uint8_t);
+READ_VALUE_T(uint16_t);
+READ_VALUE_T(int16_t);
 READ_VALUE_T(int);
 READ_VALUE_T(size_t);
-READ_VALUE_T(lua_Number);
-READ_VALUE_T(voidp);
 READ_VALUE_T(ptrdiff_t);
+READ_VALUE_T(lua_Number);
 #undef READ_VALUE_T
 
 /** ======================================================================== */
 
 /* Forward declarations for recursively called top-level functions. */
-static void persist_keyed(PersistInfo*, int);
+static void persist_keyed(PersistInfo*, int type);
 static void persist(PersistInfo*);
 static void unpersist(UnpersistInfo*);
 
@@ -379,13 +383,13 @@ static void unpersist(UnpersistInfo*);
 
 static void
 p_boolean(PersistInfo *pi) {                                      /* ... bool */
-  WRITE_VALUE(lua_toboolean(pi->L, -1), lu_byte);
+  WRITE_VALUE(lua_toboolean(pi->L, -1), uint8_t);
 }
 
 static void
 u_boolean(UnpersistInfo *upi) {                                        /* ... */
   eris_checkstack(upi->L, 1);
-  lua_pushboolean(upi->L, READ_VALUE(lu_byte));                   /* ... bool */
+  lua_pushboolean(upi->L, READ_VALUE(uint8_t));                   /* ... bool */
 
   eris_assert(lua_type(upi->L, -1) == LUA_TBOOLEAN);
 }
@@ -394,13 +398,13 @@ u_boolean(UnpersistInfo *upi) {                                        /* ... */
 
 static void
 p_pointer(PersistInfo *pi) {                                    /* ... ludata */
-  WRITE_VALUE(lua_touserdata(pi->L, -1), voidp);
+  WRITE_VALUE(lua_touserdata(pi->L, -1), size_t);
 }
 
 static void
 u_pointer(UnpersistInfo *upi) {                                        /* ... */
   eris_checkstack(upi->L, 1);
-  lua_pushlightuserdata(upi->L, READ_VALUE(voidp));             /* ... ludata */
+  lua_pushlightuserdata(upi->L, (void*)READ_VALUE(size_t));     /* ... ludata */
 
   eris_assert(lua_type(upi->L, -1) == LUA_TLIGHTUSERDATA);
 }
@@ -632,7 +636,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
         }                                                     /* ... obj func */
 
         /* Special persistence, call this function when unpersisting. */
-        WRITE_VALUE(true, lu_byte);
+        WRITE_VALUE(true, uint8_t);
         persist(pi);                                          /* ... obj func */
         lua_pop(pi->L, 1);                                         /* ... obj */
         return;
@@ -644,7 +648,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 
   if (allow) {
     /* Not special but literally persisted object. */
-    WRITE_VALUE(0, lu_byte);
+    WRITE_VALUE(false, uint8_t);
     literal(pi);                                                   /* ... obj */
   }
   else if (lua_type(pi->L, -1) == LUA_TTABLE) {
@@ -658,7 +662,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 static void
 u_special(UnpersistInfo *upi, int type, UnpersistCallback literal) {   /* ... */
   eris_checkstack(upi->L, passIOToPersist ? 2 : 1);
-  if (READ_VALUE(lu_byte)) {
+  if (READ_VALUE(uint8_t)) {
     int reference;
     /* Reserve entry in the reftable before unpersisting the function to keep
      * the reference order intact. We can set this to nil at first, because
@@ -744,9 +748,9 @@ p_proto(PersistInfo *pi) {                                       /* ... proto */
   /* Write general information. */
   WRITE_VALUE(p->linedefined, int);
   WRITE_VALUE(p->lastlinedefined, int);
-  WRITE_VALUE(p->numparams, lu_byte);
-  WRITE_VALUE(p->is_vararg, lu_byte);
-  WRITE_VALUE(p->maxstacksize, lu_byte);
+  WRITE_VALUE(p->numparams, uint8_t);
+  WRITE_VALUE(p->is_vararg, uint8_t);
+  WRITE_VALUE(p->maxstacksize, uint8_t);
 
   /* Write byte code. */
   WRITE_VALUE(p->sizecode, int);
@@ -780,12 +784,12 @@ p_proto(PersistInfo *pi) {                                       /* ... proto */
   /* Write upvalues. */
   WRITE_VALUE(p->sizeupvalues, int);
   for (i = 0; i < p->sizeupvalues; ++i) {
-    WRITE_VALUE(p->upvalues[i].instack, lu_byte);
-    WRITE_VALUE(p->upvalues[i].idx, lu_byte);
+    WRITE_VALUE(p->upvalues[i].instack, uint8_t);
+    WRITE_VALUE(p->upvalues[i].idx, uint8_t);
   }
 
   /* If we don't have to persist debug information skip the rest. */
-  WRITE_VALUE(writeDebugInformation, lu_byte);
+  WRITE_VALUE(writeDebugInformation, uint8_t);
   if (!writeDebugInformation) {
     return;
   }
@@ -840,9 +844,9 @@ u_proto(UnpersistInfo *upi) {                                    /* ... proto */
   /* Read general information. */
   p->linedefined = READ_VALUE(int);
   p->lastlinedefined = READ_VALUE(int);
-  p->numparams = READ_VALUE(lu_byte);
-  p->is_vararg = READ_VALUE(lu_byte);
-  p->maxstacksize= READ_VALUE(lu_byte);
+  p->numparams = READ_VALUE(uint8_t);
+  p->is_vararg = READ_VALUE(uint8_t);
+  p->maxstacksize= READ_VALUE(uint8_t);
 
   /* Read byte code. */
   p->sizecode = READ_VALUE(int);
@@ -887,12 +891,12 @@ u_proto(UnpersistInfo *upi) {                                    /* ... proto */
   eris_reallocvector(upi->L, p->upvalues, 0, p->sizeupvalues, Upvaldesc);
   for (i = 0, n = p->sizeupvalues; i < n; ++i) {
     p->upvalues[i].name = NULL;
-    p->upvalues[i].instack = READ_VALUE(lu_byte);
-    p->upvalues[i].idx = READ_VALUE(lu_byte);
+    p->upvalues[i].instack = READ_VALUE(uint8_t);
+    p->upvalues[i].idx = READ_VALUE(uint8_t);
   }
 
   /* Read debug information if any is present. */
-  if (!READ_VALUE(lu_byte)) {
+  if (!READ_VALUE(uint8_t)) {
     return;
   }
 
@@ -970,7 +974,7 @@ u_upval(UnpersistInfo *upi) {                                          /* ... */
  * For C closures, upvalues are always closed. */
 static void
 p_closure(PersistInfo *pi) {                         /* perms reftbl ... func */
-  size_t nup;
+  int nup;
   eris_checkstack(pi->L, 2);
   switch (ttype(pi->L->top - 1)) {
     case LUA_TLCF: /* light C function */
@@ -981,10 +985,10 @@ p_closure(PersistInfo *pi) {                         /* perms reftbl ... func */
     case LUA_TCCL: /* C closure */ {                  /* perms reftbl ... ccl */
       CClosure *cl = clCvalue(pi->L->top - 1);
       /* Mark it as a C closure. */
-      WRITE_VALUE(true, lu_byte);
+      WRITE_VALUE(true, uint8_t);
       /* Write the upvalue count first, since we have to know it when creating
        * a new closure when unpersisting. */
-      WRITE_VALUE(cl->nupvalues, lu_byte);
+      WRITE_VALUE(cl->nupvalues, uint8_t);
 
       /* We can only persist these if the underlying C function is in the
        * permtable. So we try to persist it first as a light C function. If it
@@ -1010,10 +1014,10 @@ p_closure(PersistInfo *pi) {                         /* perms reftbl ... func */
     case LUA_TLCL: /* Lua function */ {               /* perms reftbl ... lcl */
       LClosure *cl = clLvalue(pi->L->top - 1);
       /* Mark it as a Lua closure. */
-      WRITE_VALUE(false, lu_byte);
+      WRITE_VALUE(false, uint8_t);
       /* Write the upvalue count first, since we have to know it when creating
        * a new closure when unpersisting. */
-      WRITE_VALUE(cl->nupvalues, lu_byte);
+      WRITE_VALUE(cl->nupvalues, uint8_t);
 
       /* Persist the function's prototype. Pass the proto as a parameter to
        * p_proto so that it can access it and register it in the ref table. */
@@ -1049,9 +1053,9 @@ p_closure(PersistInfo *pi) {                         /* perms reftbl ... func */
 
 static void
 u_closure(UnpersistInfo *upi) {                                        /* ... */
-  size_t nup;
-  lu_byte isCClosure = READ_VALUE(lu_byte);
-  lu_byte nups = READ_VALUE(lu_byte);
+  int nup;
+  bool isCClosure = READ_VALUE(uint8_t);
+  lu_byte nups = READ_VALUE(uint8_t);
   if (isCClosure) {
     lua_CFunction f;
 
@@ -1214,20 +1218,20 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   eris_assert(thread->errfunc == 0);
 
   /* thread->oldpc always seems to be uninitialized, at least gdb always shows
-   * it as 0xbaadfood when I set a breakpoint here. */
+   * it as 0xbaadf00d when I set a breakpoint here. */
 
   /* Write general information. */
-  WRITE_VALUE(thread->status, lu_byte);
-  WRITE_VALUE(thread->nCcalls, ushort);
-  WRITE_VALUE(thread->allowhook, lu_byte);
+  WRITE_VALUE(thread->status, uint8_t);
+  WRITE_VALUE(thread->nCcalls, uint16_t);
+  WRITE_VALUE(thread->allowhook, uint8_t);
 
   /* Hooks are not supported, bloody can of worms, those.
-  WRITE_VALUE(thread->hookmask, lu_byte);
+  WRITE_VALUE(thread->hookmask, uint8_t);
   WRITE_VALUE(thread->basehookcount, int);
   WRITE_VALUE(thread->hookcount, int); */
 
   if (thread->hook) {
-    /* Warn that hooks are not persisted? */
+    /* TODO Warn that hooks are not persisted? */
   }
 
   /* Persist the stack. Save the total size and used space first. */
@@ -1253,7 +1257,9 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   /* Write call information (stack frames). In 5.2 CallInfo is stored in a
    * linked list that originates in thead.base_ci. Upon initialization the
    * thread.ci is set to thread.base_ci. During thread calls this is extended
-   * and always represents the tail of the linked list. */
+   * and always represents the tail of the callstack, though not necessarily of
+   * the linked list (which can be longer if the callstack was deeper earlier,
+   * but shrunk due to returns). */
   pushpath(pi->L, ".callinfo");
   level = 0;
   eris_assert(&thread->base_ci != thread->ci->next);
@@ -1261,8 +1267,8 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
     pushpath(pi->L, "[%d]", level++);
     WRITE_VALUE(eris_savestack(thread, ci->func), size_t);
     WRITE_VALUE(eris_savestack(thread, ci->top), size_t);
-    WRITE_VALUE(ci->nresults, short);
-    WRITE_VALUE(ci->callstatus, lu_byte);
+    WRITE_VALUE(ci->nresults, int16_t);
+    WRITE_VALUE(ci->callstatus, uint8_t);
     WRITE_VALUE(ci->extra, ptrdiff_t);
 
     eris_assert(eris_isLua(ci) || (ci->callstatus & CIST_TAIL) == 0);
@@ -1276,11 +1282,11 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
       WRITE_VALUE(ci->u.l.savedpc - lcl->p->code, size_t);
     }
     else {
-      WRITE_VALUE(ci->u.c.status, lu_byte);
+      WRITE_VALUE(ci->u.c.status, uint8_t);
 
       /* These are only used while a thread is being executed:
       WRITE_VALUE(ci->u.c.old_errfunc, ptrdiff_t);
-      WRITE_VALUE(ci->u.c.old_allowhook, lu_byte); */
+      WRITE_VALUE(ci->u.c.old_allowhook, uint8_t); */
 
       /* TODO Is this really right? Hooks may be a problem? */
       if (ci->callstatus & (CIST_YPCALL | CIST_YIELDED)) {
@@ -1293,7 +1299,7 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
     }
 
     /* Write whether there's more to come. */
-    WRITE_VALUE(ci->next == thread->ci->next, lu_byte);
+    WRITE_VALUE(ci->next == thread->ci->next, uint8_t);
 
     poppath(pi->L);
   }
@@ -1318,6 +1324,13 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   poppath(pi->L);
 }
 
+/* Used in u_thread to validate read stack positions. */
+#define validate_(stackpos, reset) \
+  if (stackpos < thread->stack || stackpos > thread->stack_last) { \
+    (reset); eris_error(upi->L, "stack index out of bounds"); }
+#define validate(stackpos) validate_(stackpos, stackpos = thread->top)
+#define validate_noreset(stackpos) validate_(stackpos, ((void)0))
+
 static void
 u_thread(UnpersistInfo *upi) {                                         /* ... */
   lua_State* thread = lua_newthread(upi->L);                    /* ... thread */
@@ -1338,20 +1351,19 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   thread->oldpc = NULL;
 
   /* Read general information. */
-  thread->status = READ_VALUE(lu_byte);
-  thread->nCcalls = READ_VALUE(ushort);
-  thread->allowhook = READ_VALUE(lu_byte);
+  thread->status = READ_VALUE(uint8_t);
+  thread->nCcalls = READ_VALUE(uint16_t);
+  thread->allowhook = READ_VALUE(uint8_t);
 
   /* Not supported.
-  thread->hookmask = READ_VALUE(lu_byte);
+  thread->hookmask = READ_VALUE(uint8_t);
   thread->basehookcount = READ_VALUE(int);
   thread->hookcount = READ_VALUE(int); */
 
   /* Unpersist the stack. Read size first and adjust accordingly. */
   eris_reallocstack(thread, READ_VALUE(int));
   thread->top = thread->stack + READ_VALUE(size_t);
-  /* eris_checkstack(thread, level);
-  lua_settop(thread, level); */
+  validate(thread->top);
 
   /* Read the elements one by one. */
   pushpath(upi->L, ".stack");
@@ -1372,24 +1384,36 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   for (;;) {
     pushpath(upi->L, "[%d]", level++);
     thread->ci->func = eris_restorestack(thread, READ_VALUE(size_t));
+    validate(thread->ci->func);
     thread->ci->top = eris_restorestack(thread, READ_VALUE(size_t));
-    thread->ci->nresults = READ_VALUE(short);
-    thread->ci->callstatus = READ_VALUE(lu_byte);
+    validate(thread->ci->top);
+    thread->ci->nresults = READ_VALUE(int16_t);
+    thread->ci->callstatus = READ_VALUE(uint8_t);
     thread->ci->extra = READ_VALUE(ptrdiff_t);
+    /* TODO I haven't quite figured out yet exactly when this is a used value
+    *       or just uninitialized junk (based on callstatus etc.) */
+    /* validate_noreset(eris_restorestack(thread, thread->ci->extra)); */
 
     if (eris_isLua(thread->ci)) {
       LClosure *lcl = eris_ci_func(thread->ci);
       thread->ci->u.l.base = eris_restorestack(thread, READ_VALUE(size_t));
+      validate(thread->ci->u.l.base);
       thread->ci->u.l.savedpc = lcl->p->code + READ_VALUE(size_t);
+      if (thread->ci->u.l.savedpc < lcl->p->code ||
+          thread->ci->u.l.savedpc >= lcl->p->code + lcl->p->sizecode)
+      {
+        thread->ci->u.l.savedpc = lcl->p->code;
+        eris_error(upi->L, "saved program counter out of bounds");
+      }
     }
     else {
-      thread->ci->u.c.status = READ_VALUE(lu_byte);
+      thread->ci->u.c.status = READ_VALUE(uint8_t);
 
       /* These are only used while a thread is being executed:
       thread->ci->u.c.old_errfunc = READ_VALUE(ptrdiff_t);
-      thread->ci->u.c.old_allowhook = READ_VALUE(lu_byte); */
+      thread->ci->u.c.old_allowhook = READ_VALUE(uint8_t); */
 
-      /* TODO See thread persist function. */
+      /* TODO Is this really right? */
       if (thread->ci->callstatus & (CIST_YPCALL | CIST_YIELDED)) {
         thread->ci->u.c.ctx = READ_VALUE(int);
         unpersist(upi);                                   /* ... thread func? */
@@ -1397,7 +1421,7 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
           thread->ci->u.c.k = lua_tocfunction(upi->L, -1);
         }
         else {
-          luaL_error(upi->L, "bad C continuation function");
+          eris_error(upi->L, "bad C continuation function");
           return; /* not reached */
         }
         lua_pop(upi->L, 1);                                     /* ... thread */
@@ -1412,7 +1436,7 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     poppath(upi->L);
 
     /* Read in value for check for next iteration. */
-    if (READ_VALUE(lu_byte)) {
+    if (READ_VALUE(uint8_t)) {
       break;
     }
     else {
@@ -1473,6 +1497,8 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
 
   eris_assert(lua_type(upi->L, -1) == LUA_TTHREAD);
 }
+
+#undef validate
 
 /*
 ** ============================================================================
@@ -1560,7 +1586,7 @@ persist_keyed(PersistInfo *pi, int type) {     /* perms reftbl ... obj refkey */
      * that we can verify what we get in the permtable when unpersisting is of
      * the same kind we had when persisting. */
     WRITE_VALUE(ERIS_PERMANENT, int);
-    WRITE_VALUE(type, int);
+    WRITE_VALUE(type, uint8_t);
     persist(pi);                              /* perms reftbl ... obj permkey */
     lua_pop(pi->L, 1);                                /* perms reftbl ... obj */
   }
@@ -1604,7 +1630,7 @@ persist(PersistInfo *pi) {                            /* perms reftbl ... obj */
 
 static void
 u_permanent(UnpersistInfo *upi) {                         /* perms reftbl ... */
-  const int type = READ_VALUE(int);
+  const int type = READ_VALUE(uint8_t);
   /* Reserve reference to avoid the key going first. This registers whatever
    * else is on the stack in the reftable, but that shouldn't really matter. */
   const int reference = registerobject(upi);
@@ -1630,8 +1656,9 @@ u_permanent(UnpersistInfo *upi) {                         /* perms reftbl ... */
 
 static void
 unpersist(UnpersistInfo *upi) {                           /* perms reftbl ... */
-  eris_ifassert(const int top = lua_gettop(upi->L));
   const int typeOrReference = READ_VALUE(int);
+
+  eris_ifassert(const int top = lua_gettop(upi->L));
 
   eris_checkstack(upi->L, 1);
 
@@ -1763,6 +1790,30 @@ reader(lua_State *L, void *ud, size_t *sz) {
 */
 
 static void
+p_header(PersistInfo *pi) {
+  WRITE_VALUE(sizeof(int), uint8_t);
+  WRITE_VALUE(sizeof(size_t), uint8_t);
+  WRITE_VALUE(sizeof(ptrdiff_t), uint8_t);
+  WRITE_VALUE(sizeof(lua_Number), uint8_t);
+}
+
+static void
+u_header(UnpersistInfo *upi) {
+  size_t sizeOfInt = READ_VALUE(uint8_t);
+  size_t sizeOfSizeT = READ_VALUE(uint8_t);
+  size_t sizeOfPtrDiffT = READ_VALUE(uint8_t);
+  size_t sizeOfLuaNumber = READ_VALUE(uint8_t);
+
+  if (sizeOfInt != sizeof(int) ||
+      sizeOfSizeT != sizeof(size_t) ||
+      sizeOfPtrDiffT != sizeof(ptrdiff_t) ||
+      sizeOfLuaNumber != sizeof(lua_Number))
+  {
+    luaL_error(upi->L, "Data was persisted on incompatible platform.");
+  }
+}
+
+static void
 unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
                                                        /* perms buff? rootobj */
   PersistInfo pi;
@@ -1786,6 +1837,7 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
   populateperms(L, 0);
   lua_pop(L, 1);
 
+  p_header(&pi);
   persist(&pi);                           /* perms reftbl path? buff? rootobj */
 
   if (generatePath) {                      /* perms reftbl path buff? rootobj */
@@ -1816,8 +1868,10 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
   populateperms(L, 1);
   lua_pop(L, 1);
 
+
   lua_gc(L, LUA_GCSTOP, 0);
 
+  u_header(&upi);
   unpersist(&upi);                         /* perms reftbl path? str? rootobj */
   if (generatePath) {                       /* perms reftbl path str? rootobj */
     lua_remove(L, 3);                            /* perms reftbl str? rootobj */
