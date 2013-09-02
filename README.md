@@ -26,8 +26,8 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
 * `void eris_dump(lua_State* L, lua_Writer writer, void* ud);` `[-0, +0, e]`  
   This provides an interface to Eris' persist functionality for writing in an arbitrary way, using a writer. When called, the stack in `L` must look like this:
-  1. `perms[table]`
-  2. `value[any]`  
+  1. `perms:table`
+  2. `value:any`  
 
   That is, `perms` must be a table at stack position 1. This table is used as the permanent object table. `value` is the value that should be persisted. It can be any persistable Lua value. 'writer' is the writer function used to store all data, `ud` is passed to the writer function whenever it is called.
 
@@ -35,7 +35,7 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
 * `void eris_undump(lua_State* L, lua_Reader reader, void* ud);` `[-0, +1, e]`  
   This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. When called, the stack in `L` must look like this:
-  1. `perms[table]`  
+  1. `perms:table`  
 
   That is, `perms` must be a table at stack position 1. This table is used as the permanent objcet table. This must hold the inverse mapping present in the permanent object table used when persisting. `reader` is the reader function used to read all data, `ud` is passed to the reader function whenever it is called. The result of the operation will be pushed onto the stack.
 

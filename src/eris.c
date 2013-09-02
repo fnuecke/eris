@@ -57,20 +57,19 @@ typedef int bool;
 ** Settings.
 ** ============================================================================
 */
-/* TODO Add a way to change these via some API function. */
 
 /* The metatable key we use to allow customized persistence for tables and
  * userdata. */
-static const char *persistKey = "__persist";
+static const char *const kPersistKey = "__persist";
 
 /* Whether to persist debug information such as line numbers and upvalue and
  * local variable names. */
-static bool writeDebugInformation = 1;
+static const bool kWriteDebugInformation = true;
 
 /* Whether to pass the IO object (reader/writer) to the special function
  * defined in the metafield or not. This is disabled per default because it
  * mey allow Lua scripts to do more than they should. Enable this as needed. */
-static bool passIOToPersist = 0;
+static const bool kPassIOToPersist = false;
 
 /* Generate a human readable "path" that is shown together with error messages
  * to indicate where in the object the error occurred. For example:
@@ -78,7 +77,7 @@ static bool passIOToPersist = 0;
  * Will produce: main:1: attempt to persist forbidden table (root.bad)
  * This can be used for debugging, but is disabled per default due to the
  * processing and memory overhead this introduces. */
-static bool generatePath = 0;
+static const bool kGeneratePath = false;
 
 /*
 ** ============================================================================
@@ -254,7 +253,7 @@ copytstring(lua_State* L, TString **ts) {
  * This supports formatting strings using Lua's formatting capabilities. */
 static void
 pushpath(lua_State *L, const char* fmt, ...) {       /* perms reftbl path ... */
-  if (!generatePath) {
+  if (!kGeneratePath) {
     return;
   }
   else {
@@ -270,7 +269,7 @@ pushpath(lua_State *L, const char* fmt, ...) {       /* perms reftbl path ... */
 /* Pops the last added segment from the current path if we're generating one. */
 static void
 poppath(lua_State* L) {                              /* perms reftbl path ... */
-  if (!generatePath) {
+  if (!kGeneratePath) {
     return;
   }
   eris_checkstack(L, 1);
@@ -305,7 +304,7 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
     lua_pushvfstring(L, fmt, argp);        /* perms reftbl path ... where str */
     va_end(argp);
     lua_concat(L, 2);                            /* perms reftbl path ... str */
-    if (generatePath) {
+    if (kGeneratePath) {
       eris_checkstack(L, 3);
       lua_pushstring(L, " (");              /* perms reftbl path ... str " (" */
       path(L);                         /* perms reftbl path ... str " (" path */
@@ -496,7 +495,7 @@ p_literaltable(PersistInfo *pi) {                                  /* ... tbl */
   while (lua_next(pi->L, -2)) {                                /* ... tbl k v */
     lua_pushvalue(pi->L, -2);                                /* ... tbl k v k */
 
-    if (generatePath) {
+    if (kGeneratePath) {
       if (lua_type(pi->L, -1) == LUA_TSTRING) {
         const char *key = lua_tostring(pi->L, -1);
         pushpath(pi->L, ".%s", key);
@@ -543,7 +542,7 @@ u_literaltable(UnpersistInfo *upi) {                                   /* ... */
       break;
     }                                                          /* ... tbl key */
 
-    if (generatePath) {
+    if (kGeneratePath) {
       if (lua_type(upi->L, -1) == LUA_TSTRING) {
         const char *key = lua_tostring(upi->L, -1);
         pushpath(upi->L, ".%s", key);
@@ -604,7 +603,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 
   /* Check whether we should persist literally, or via the metafunction. */
   if (lua_getmetatable(pi->L, -1)) {                            /* ... obj mt */
-    lua_pushstring(pi->L, persistKey);                     /* ... obj mt pkey */
+    lua_pushstring(pi->L, kPersistKey);                    /* ... obj mt pkey */
     lua_rawget(pi->L, -2);                             /* ... obj mt persist? */
     switch (lua_type(pi->L, -1)) {
       /* No entry, act according to default. */
@@ -623,7 +622,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
         lua_replace(pi->L, -2);                               /* ... obj func */
         lua_pushvalue(pi->L, -2);                         /* ... obj func obj */
 
-        if (passIOToPersist) {
+        if (kPassIOToPersist) {
           lua_pushlightuserdata(pi->L, pi->writer);/* ... obj func obj writer */
           lua_pushlightuserdata(pi->L, pi->ud); /* ... obj func obj writer ud */
           lua_call(pi->L, 3, 1);                             /* ... obj func? */
@@ -632,7 +631,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
           lua_call(pi->L, 1, 1);                             /* ... obj func? */
         }
         if (!lua_isfunction(pi->L, -1)) {                       /* ... obj :( */
-          eris_error(pi->L, "%s did not return a function", persistKey);
+          eris_error(pi->L, "%s did not return a function", kPersistKey);
         }                                                     /* ... obj func */
 
         /* Special persistence, call this function when unpersisting. */
@@ -641,7 +640,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
         lua_pop(pi->L, 1);                                         /* ... obj */
         return;
       default:                                               /* ... obj mt :( */
-        eris_error(pi->L, "%d not nil, boolean, or function", persistKey);
+        eris_error(pi->L, "%d not nil, boolean, or function", kPersistKey);
         return; /* not reached */
     }
   }
@@ -661,7 +660,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 
 static void
 u_special(UnpersistInfo *upi, int type, UnpersistCallback literal) {   /* ... */
-  eris_checkstack(upi->L, passIOToPersist ? 2 : 1);
+  eris_checkstack(upi->L, kPassIOToPersist ? 2 : 1);
   if (READ_VALUE(uint8_t)) {
     int reference;
     /* Reserve entry in the reftable before unpersisting the function to keep
@@ -677,7 +676,7 @@ u_special(UnpersistInfo *upi, int type, UnpersistCallback literal) {   /* ... */
       eris_error(upi->L, "invalid restore function");
     }                                                           /* ... spfunc */
 
-    if (passIOToPersist) {
+    if (kPassIOToPersist) {
       lua_pushlightuserdata(upi->L, &upi->zio);             /* ... spfunc zio */
       lua_call(upi->L, 1, 1);                                     /* ... obj? */
     } else {
@@ -789,8 +788,8 @@ p_proto(PersistInfo *pi) {                                       /* ... proto */
   }
 
   /* If we don't have to persist debug information skip the rest. */
-  WRITE_VALUE(writeDebugInformation, uint8_t);
-  if (!writeDebugInformation) {
+  WRITE_VALUE(kWriteDebugInformation, uint8_t);
+  if (!kWriteDebugInformation) {
     return;
   }
 
@@ -1750,7 +1749,7 @@ writer(lua_State *L, const void *p, size_t sz, void *ud) {
       char *newbuff = (char*)lua_newuserdata(L, newcapacity * sizeof(char));
                                          /* perms reftbl path? buff ... nbuff */
       memcpy(newbuff, eris_buffer(buff), eris_bufflen(buff));
-      lua_replace(L, generatePath ? 4 : 3);   /* perms reftbl path? nbuff ... */
+      lua_replace(L, kGeneratePath ? 4 : 3);  /* perms reftbl path? nbuff ... */
       eris_buffer(buff) = newbuff;
       eris_sizebuffer(buff) = newcapacity;
     }
@@ -1826,7 +1825,7 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
 
   lua_newtable(L);                              /* perms buff? rootobj reftbl */
   lua_insert(L, 2);                             /* perms reftbl buff? rootobj */
-  if (generatePath) {
+  if (kGeneratePath) {
     lua_newtable(L);                       /* perms reftbl buff? rootobj path */
     lua_insert(L, 3);                      /* perms reftbl path buff? rootobj */
     pushpath(L, "root");
@@ -1834,13 +1833,13 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
 
   /* Populate perms table with Lua internals. */
   lua_pushvalue(L, 1);
-  populateperms(L, 0);
+  populateperms(L, false);
   lua_pop(L, 1);
 
   p_header(&pi);
   persist(&pi);                           /* perms reftbl path? buff? rootobj */
 
-  if (generatePath) {                      /* perms reftbl path buff? rootobj */
+  if (kGeneratePath) {                     /* perms reftbl path buff? rootobj */
     lua_remove(L, 3);                           /* perms reftbl buff? rootobj */
   }                                             /* perms reftbl buff? rootobj */
   lua_remove(L, 2);                                    /* perms buff? rootobj */
@@ -1857,7 +1856,7 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
 
   lua_newtable(L);                                       /* perms str? reftbl */
   lua_insert(L, 2);                                      /* perms reftbl str? */
-  if (generatePath) {
+  if (kGeneratePath) {
     lua_newtable(L);                                /* perms reftbl str? path */
     lua_insert(L, 3);                               /* perms reftbl path str? */
     pushpath(L, "root");
@@ -1865,7 +1864,7 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
 
   /* Populate perms table with Lua internals. */
   lua_pushvalue(L, 1);
-  populateperms(L, 1);
+  populateperms(L, true);
   lua_pop(L, 1);
 
 
@@ -1873,7 +1872,7 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
 
   u_header(&upi);
   unpersist(&upi);                         /* perms reftbl path? str? rootobj */
-  if (generatePath) {                       /* perms reftbl path str? rootobj */
+  if (kGeneratePath) {                      /* perms reftbl path str? rootobj */
     lua_remove(L, 3);                            /* perms reftbl str? rootobj */
   }                                              /* perms reftbl str? rootobj */
   lua_remove(L, 2);                                     /* perms str? rootobj */
@@ -1961,7 +1960,7 @@ LUA_API int luaopen_eris(lua_State *L) {
 ** ============================================================================
 */
 
-void
+LUA_API void
 eris_dump(lua_State *L, lua_Writer writer, void *ud) {     /* perms? rootobj? */
   if (lua_gettop(L) > 2) {
     luaL_error(L, "too many arguments");
@@ -1971,7 +1970,7 @@ eris_dump(lua_State *L, lua_Writer writer, void *ud) {     /* perms? rootobj? */
   unchecked_persist(L, writer, ud);                          /* perms rootobj */
 }
 
-void
+LUA_API void
 eris_undump(lua_State *L, lua_Reader reader, void *ud) {            /* perms? */
   if (lua_gettop(L) > 1) {
     luaL_error(L, "too many arguments");
@@ -1982,7 +1981,7 @@ eris_undump(lua_State *L, lua_Reader reader, void *ud) {            /* perms? */
 
 /** ======================================================================== */
 
-void
+LUA_API void
 eris_persist(lua_State* L, int perms, int value) {                    /* ...? */
   eris_checkstack(L, 3);
   lua_pushcfunction(L, l_persist);                           /* ... e_persist */
@@ -1991,7 +1990,7 @@ eris_persist(lua_State* L, int perms, int value) {                    /* ...? */
   lua_call(L, 2, 1);                                               /* ... str */
 }
 
-void
+LUA_API void
 eris_unpersist(lua_State* L, int perms, int value) {                   /* ... */
   eris_checkstack(L, 3);
   lua_pushcfunction(L, l_unpersist);                       /* ... e_unpersist */
