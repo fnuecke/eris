@@ -1324,11 +1324,10 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
 }
 
 /* Used in u_thread to validate read stack positions. */
-#define validate_(stackpos, reset) \
-  if (stackpos < thread->stack || stackpos > thread->stack_last) { \
-    (reset); eris_error(upi->L, "stack index out of bounds"); }
-#define validate(stackpos) validate_(stackpos, stackpos = thread->top)
-#define validate_noreset(stackpos) validate_(stackpos, ((void)0))
+#define validate(stackpos, inclmax) \
+  if ((stackpos) < thread->stack || stackpos > (inclmax)) { \
+    (stackpos) = thread->stack; \
+    eris_error(upi->L, "stack index out of bounds"); }
 
 static void
 u_thread(UnpersistInfo *upi) {                                         /* ... */
@@ -1362,7 +1361,7 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   /* Unpersist the stack. Read size first and adjust accordingly. */
   eris_reallocstack(thread, READ_VALUE(int));
   thread->top = thread->stack + READ_VALUE(size_t);
-  validate(thread->top);
+  validate(thread->top, thread->stack_last);
 
   /* Read the elements one by one. */
   pushpath(upi->L, ".stack");
@@ -1383,25 +1382,24 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   for (;;) {
     pushpath(upi->L, "[%d]", level++);
     thread->ci->func = eris_restorestack(thread, READ_VALUE(size_t));
-    validate(thread->ci->func);
+    validate(thread->ci->func, thread->top - 1);
     thread->ci->top = eris_restorestack(thread, READ_VALUE(size_t));
-    validate(thread->ci->top);
+    validate(thread->ci->top, thread->stack_last);
     thread->ci->nresults = READ_VALUE(int16_t);
     thread->ci->callstatus = READ_VALUE(uint8_t);
     thread->ci->extra = READ_VALUE(ptrdiff_t);
     /* TODO I haven't quite figured out yet exactly when this is a used value
     *       or just uninitialized junk (based on callstatus etc.) */
-    /* validate_noreset(eris_restorestack(thread, thread->ci->extra)); */
 
     if (eris_isLua(thread->ci)) {
       LClosure *lcl = eris_ci_func(thread->ci);
       thread->ci->u.l.base = eris_restorestack(thread, READ_VALUE(size_t));
-      validate(thread->ci->u.l.base);
+      validate(thread->ci->u.l.base, thread->top);
       thread->ci->u.l.savedpc = lcl->p->code + READ_VALUE(size_t);
       if (thread->ci->u.l.savedpc < lcl->p->code ||
-          thread->ci->u.l.savedpc >= lcl->p->code + lcl->p->sizecode)
+          thread->ci->u.l.savedpc > lcl->p->code + lcl->p->sizecode)
       {
-        thread->ci->u.l.savedpc = lcl->p->code;
+        thread->ci->u.l.savedpc = lcl->p->code; /* Just to be safe. */
         eris_error(upi->L, "saved program counter out of bounds");
       }
     }
@@ -1411,6 +1409,8 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
       /* These are only used while a thread is being executed:
       thread->ci->u.c.old_errfunc = READ_VALUE(ptrdiff_t);
       thread->ci->u.c.old_allowhook = READ_VALUE(uint8_t); */
+      thread->ci->u.c.old_errfunc = 0;
+      thread->ci->u.c.old_allowhook = 0;
 
       /* TODO Is this really right? */
       if (thread->ci->callstatus & (CIST_YPCALL | CIST_YIELDED)) {
@@ -1429,8 +1429,6 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
         thread->ci->u.c.ctx = 0;
         thread->ci->u.c.k = NULL;
       }
-      thread->ci->u.c.old_errfunc = 0;
-      thread->ci->u.c.old_allowhook = 0;
     }
     poppath(upi->L);
 
@@ -1453,6 +1451,7 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   level = 0;
   for (;;) {
     UpVal *nuv;
+    StkId stk;
     /* Get the position of the upvalue on the stack. As a special value we pass
      * -1 to indicate there are no more upvalues. */
     const size_t offset = READ_VALUE(size_t);
@@ -1460,11 +1459,13 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
       break;
     }
     pushpath(upi->L, "[%d]", level);
+    stk = eris_restorestack(thread, offset);
+    validate(stk, thread->top - 1);
     unpersist(upi);                                         /* ... thread tbl */
     eris_assert(lua_type(upi->L, -1) == LUA_TTABLE);
 
     /* Create the open upvalue either way. */
-    nuv = eris_findupval(thread, eris_restorestack(thread, offset));
+    nuv = eris_findupval(thread, stk);
 
     /* Then check if we need to patch some pointers. */
     lua_rawgeti(upi->L, -1, 2);                   /* ... thread tbl upval/nil */
