@@ -267,6 +267,22 @@ coroutine.resume(protthr)
 rootobj.testprotthr = protthr
 
 -------------------------------------------------------------------------------
+-- Yield across xpcall with message handler.
+
+local function xprotthreadfunc()
+  local function handler(msg)
+    return "handler:" .. msg
+  end
+  local res, err = xpcall(protf, handler, "test")
+  return err
+end
+
+local xprotthr = coroutine.create(xprotthreadfunc)
+coroutine.resume(xprotthr)
+
+rootobj.testxprotthr = xprotthr
+
+-------------------------------------------------------------------------------
 -- Yield out of metafunction.
 
 local function ymtf(arg)
@@ -481,6 +497,7 @@ perms = {
   [coroutine.yield] = 1,
   [permtable] = 2,
   [pcall] = 3,
+  [xpcall] = 4,
 }
 buf = eris.persist(perms, rootobj)
 

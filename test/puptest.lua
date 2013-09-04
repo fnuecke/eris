@@ -54,6 +54,7 @@ function test(rootobj)
   dotest("Thread dead            ", coroutine.resume(rootobj.testdthread) == false)
   dotest("Open upvalues          ", testuvinthread(rootobj.testuvinthread))
   dotest("Yielded pcall          ", coroutine.resume(rootobj.testprotthr) == true, "test")
+  dotest("Yielded xpcall         ", coroutine.resume(rootobj.testxprotthr) == true, "handler:test")
   dotest("Yielded metafunc       ", coroutine.resume(rootobj.testymtthr) == true, true)
   dotest("Deep callstack         ", rootobj.testdeep() == 100)
   dotest("Tail call              ", rootobj.testtail() == 100)
@@ -93,6 +94,7 @@ uperms = {
   [1] = coroutine.yield,
   [2] = permtable,
   [3] = pcall,
+  [4] = xpcall,
 }
 rootobj = eris.unpersist(uperms, buf)
 
