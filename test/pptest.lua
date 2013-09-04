@@ -13,7 +13,7 @@ end
 -------------------------------------------------------------------------------
 -- Permanent values.
 
-permtable = { 1234 }
+local permtable = { 1234 }
 
 rootobj.testperm = permtable
 
@@ -30,14 +30,14 @@ rootobj.testfoobar = "foobar"
 -------------------------------------------------------------------------------
 -- Tables.
 
-testtbl = { a = 2, [2] = 4 }
+local testtbl = { a = 2, [2] = 4 }
 
 rootobj.testtbl = testtbl
 
 -------------------------------------------------------------------------------
 -- NaNs in tables (checks that this doesn't break the internal ref table).
 
-nantable = {}
+local nantable = {}
 nantable[1] = 0/0
 
 rootobj.testnan = nantable
@@ -45,8 +45,8 @@ rootobj.testnan = nantable
 -------------------------------------------------------------------------------
 -- Cycles in tables.
 
-testloopa = {}
-testloopb = { testloopa = testloopa }
+local testloopa = {}
+local testloopb = { testloopa = testloopa }
 testloopa.testloopb = testloopb
 
 rootobj.testlooptable = testloopa
@@ -54,7 +54,7 @@ rootobj.testlooptable = testloopa
 -------------------------------------------------------------------------------
 -- Metatables.
 
-twithmt = {}
+local twithmt = {}
 setmetatable( twithmt, { __call = function() return 21 end } )
 
 rootobj.testmt = twithmt
@@ -62,7 +62,7 @@ rootobj.testmt = twithmt
 -------------------------------------------------------------------------------
 -- Yet more metatables.
 
-niinmt = { a = 3 }
+local niinmt = { a = 3 }
 setmetatable(niinmt, {__newindex = function(key, val) end })
 
 rootobj.testniinmt = niinmt
@@ -70,14 +70,14 @@ rootobj.testniinmt = niinmt
 -------------------------------------------------------------------------------
 -- Literal userdata.
 
-literaludata = boxinteger(71)
+local literaludata = boxinteger(71)
 
 rootobj.testliteraludata = literaludata
 
 -------------------------------------------------------------------------------
 -- Functions (closures without upvalues).
 
-function func()
+local function func()
   return 4
 end
 
@@ -86,7 +86,7 @@ rootobj.testfuncreturnsfour = func
 -------------------------------------------------------------------------------
 -- Environment. This is really redundant in 5.2 since envs are just upvalues,
 -- but it may still be considered somewhat special.
-testfenv = (function()
+local testfenv = (function()
   local _ENV = { abc = 456 }
   return function()
     return abc
@@ -98,7 +98,7 @@ rootobj.testfenv = testfenv
 -------------------------------------------------------------------------------
 -- Closures.
 
-function funcreturningclosure(n)
+local function funcreturningclosure(n)
   return function()
     return n
   end
@@ -110,7 +110,7 @@ rootobj.testnilclosure = funcreturningclosure(nil)
 -------------------------------------------------------------------------------
 -- More closures.
 
-function nestedfunc(n)
+local function nestedfunc(n)
   return (function(m) return m+2 end)(n+3)
 end
 
@@ -138,7 +138,7 @@ rootobj.testuvcycle = uvcycle
 -------------------------------------------------------------------------------
 -- Special callback for persisting tables.
 
-sptable = { a = 3 }
+local sptable = { a = 3 }
 
 setmetatable(sptable, { 
   __persist = function(tbl)
@@ -160,7 +160,7 @@ rootobj.testspudata2 = boxboolean(false)
 -------------------------------------------------------------------------------
 -- Reference correctness.
 
-sharedref = {}
+local sharedref = {}
 refa = {sharedref = sharedref}
 refb = {sharedref = sharedref}
 
@@ -170,7 +170,7 @@ rootobj.testsharedrefb = refb
 -------------------------------------------------------------------------------
 -- Shared upvalues (like reference correctness for upvalues).
 
-function makecounter()
+local function makecounter()
   local a = 0
   return {
     inc = function() a = a + 1 end,
@@ -183,7 +183,7 @@ rootobj.testsharedupval = makecounter()
 -------------------------------------------------------------------------------
 -- Debug info.
 
-function debuginfo(foo)
+local function debuginfo(foo)
   foo = foo + foo
   return debug.getlocal(1,1)
 end
@@ -191,34 +191,47 @@ end
 rootobj.testdebuginfo = debuginfo
 
 -------------------------------------------------------------------------------
--- Threads.
+-- Suspended thread.
 
-function fa(i)
-  local ia = i + 1
-  return fb(ia)
-end
-
-function fb(i)
-  local ib = i + 1
-  ib = ib + fc(ib)
-  return ib
-end
-
-function fc(i)
+local function fc(i)
   local ic = i + 1
   coroutine.yield()
   return ic*2
 end
 
-thr = coroutine.create(fa)
+local function fb(i)
+  local ib = i + 1
+  ib = ib + fc(ib)
+  return ib
+end
+
+local function fa(i)
+  local ia = i + 1
+  return fb(ia)
+end
+
+local thr = coroutine.create(fa)
 coroutine.resume(thr, 2)
 
 rootobj.testthread = thr
 
 -------------------------------------------------------------------------------
+-- Not yet started thread.
+
+rootobj.testnthread = coroutine.create(function() return func() end)
+
+-------------------------------------------------------------------------------
+-- Dead thread.
+
+local deadthr = coroutine.create(function() return func() end)
+coroutine.resume(deadthr)
+
+rootobj.testdthread = deadthr
+
+-------------------------------------------------------------------------------
 -- Open upvalues (stored in thread stack).
 
-function uvinthreadfunc()
+local function uvinthreadfunc()
   local a = 1
   local b = function()
     a = a+1
@@ -231,7 +244,7 @@ function uvinthreadfunc()
   return a
 end
 
-uvinthread = coroutine.create(uvinthreadfunc)
+local uvinthread = coroutine.create(uvinthreadfunc)
 coroutine.resume(uvinthread)
 
 rootobj.testuvinthread = uvinthread
@@ -239,16 +252,16 @@ rootobj.testuvinthread = uvinthread
 -------------------------------------------------------------------------------
 -- Yield across pcall.
 
-function protf(arg)
+local function protf(arg)
   coroutine.yield()
   error(arg, 0)
 end
-function protthreadfunc()
+local function protthreadfunc()
   local res, err = pcall(protf, "test")
   return err
 end
 
-protthr = coroutine.create(protthreadfunc)
+local protthr = coroutine.create(protthreadfunc)
 coroutine.resume(protthr)
 
 rootobj.testprotthr = protthr
@@ -256,7 +269,7 @@ rootobj.testprotthr = protthr
 -------------------------------------------------------------------------------
 -- Yield out of metafunction.
 
-function ymtf(arg)
+local function ymtf(arg)
   coroutine.yield()
   return true
 end
@@ -265,7 +278,7 @@ function ymtthreadfunc()
   return t < 5
 end
 
-ymtthr = coroutine.create(ymtthreadfunc)
+local ymtthr = coroutine.create(ymtthreadfunc)
 coroutine.resume(ymtthr)
 
 rootobj.testymtthr = ymtthr
@@ -299,7 +312,7 @@ rootobj.testhookthr = hookthr
 -------------------------------------------------------------------------------
 -- Deep callstacks (100 levels).
 
-function deepfunc(x)
+local function deepfunc(x)
   x = x or 0
   if x == 100 then
     coroutine.yield()
@@ -309,7 +322,7 @@ function deepfunc(x)
   return result
 end
 
-deepcall = coroutine.wrap(deepfunc)
+local deepcall = coroutine.wrap(deepfunc)
 deepcall()
 
 rootobj.testdeep = deepcall
@@ -317,7 +330,7 @@ rootobj.testdeep = deepcall
 -------------------------------------------------------------------------------
 -- Tail calls.
 
-function tailfunc()
+local function tailfunc()
   local function tailer(x)
     x = x or 0
     if x == 100 then
@@ -339,7 +352,7 @@ function wrap(t)
   end
 end
 
-tailcall = wrap(tailfunc)
+local tailcall = wrap(tailfunc)
 tailcall()
 
 rootobj.testtail = tailcall

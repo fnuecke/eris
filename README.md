@@ -24,7 +24,7 @@ C API
 
 Like Pluto, Eris offers two functions to persist to or read from an arbitrary source. Eris uses the Lua typedefs `lua_Writer` and `lua_Reader` for this purpose, the replacements of `lua_Chunkwriter` and `lua_Chunkreader` used by Pluto.
 
-* `void eris_dump(lua_State* L, lua_Writer writer, void* ud);` `[-0, +0, e]`  
+* `void eris_dump(lua_State *L, lua_Writer writer, void *ud);` `[-0, +0, e]`  
   This provides an interface to Eris' persist functionality for writing in an arbitrary way, using a writer. When called, the stack in `L` must look like this:
   1. `perms:table`
   2. `value:any`  
@@ -33,7 +33,7 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
   This function is equivalent to `pluto_persist`.
 
-* `void eris_undump(lua_State* L, lua_Reader reader, void* ud);` `[-0, +1, e]`  
+* `void eris_undump(lua_State *L, lua_Reader reader, void *ud);` `[-0, +1, e]`  
   This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. When called, the stack in `L` must look like this:
   1. `perms:table`  
 
@@ -43,10 +43,10 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
 
 In addition to these, Eris also offers two more convenient functions, if you simply wish to persist an object to a string. These behave like the functions exposed to Lua.
 
-* `void eris_persist(lua_State* L, int perms, int value);` `[-0, +1, e]`  
+* `void eris_persist(lua_State *L, int perms, int value);` `[-0, +1, e]`  
   It expects the permanent object table at the specified index `perms` and the value to persist at the specified index `value`. It will push the resulting binary string onto the stack on success.
 
-* `void eris_unpersist(lua_State* L, int perms, int value);` `[-0, +1, e]`  
+* `void eris_unpersist(lua_State *L, int perms, int value);` `[-0, +1, e]`  
   It expects the permanent object table at the specified index `perms` and the binary string containing persisted data at the specified index `value`. It will push the resulting value onto the stack on success.
 
 The subtle name change from Pluto was done because Lua's own dump/undump works with a writer/reader, so it felt more consistent this way.

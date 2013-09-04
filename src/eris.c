@@ -94,31 +94,41 @@ static const bool kGeneratePath = false;
 /* I'm quite sure we won't ever want to do this, because Eris needs a slightly
  * patched Lua version to be able to persist some of the library functions,
  * anyway: it needs to put the continuation C functions in the perms table. */
-#define eris_setobj setobj
-#define eris_setsvalue2n setsvalue2n
-#define eris_setclLvalue setclLvalue
-#define eris_setnilvalue setnilvalue
-#define eris_gco2uv gco2uv
-#define eris_obj2gco obj2gco
-#define eris_incr_top incr_top
-#define eris_isLua isLua
+/* ldebug.h */
 #define eris_ci_func ci_func
+/* ldo.h */
+#define eris_incr_top incr_top
 #define eris_savestack savestack
 #define eris_restorestack restorestack
 #define eris_reallocstack luaD_reallocstack
-#define eris_extendCI luaE_extendCI
-#define eris_findupval luaF_findupval
+/* lfunc.h */
 #define eris_newproto luaF_newproto
 #define eris_newLclosure luaF_newLclosure
 #define eris_newupval luaF_newupval
+#define eris_findupval luaF_findupval
+/* lmem.h */
 #define eris_reallocvector luaM_reallocvector
+/* lobject.h */
+#define eris_ttypenv ttypenv
+#define eris_setnilvalue setnilvalue
+#define eris_setclLvalue setclLvalue
+#define eris_setobj setobj
+#define eris_setsvalue2n setsvalue2n
+/* lstate.h */
+#define eris_isLua isLua
+#define eris_gch gch
+#define eris_gco2uv gco2uv
+#define eris_obj2gco obj2gco
+#define eris_extendCI luaE_extendCI
+/* lstring. h */
 #define eris_newlstr luaS_newlstr
+/* lzio.h */
+#define eris_initbuffer luaZ_initbuffer
+#define eris_buffer luaZ_buffer
+#define eris_sizebuffer luaZ_sizebuffer
+#define eris_bufflen luaZ_bufflen
 #define eris_init luaZ_init
 #define eris_read luaZ_read
-#define eris_buffer luaZ_buffer
-#define eris_bufflen luaZ_bufflen
-#define eris_sizebuffer luaZ_sizebuffer
-#define eris_initbuffer luaZ_initbuffer
 
 /* Enabled if we have a patched version of Lua (for accessing internals). */
 #if 1
@@ -1268,7 +1278,16 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
     WRITE_VALUE(eris_savestack(thread, ci->top), size_t);
     WRITE_VALUE(ci->nresults, int16_t);
     WRITE_VALUE(ci->callstatus, uint8_t);
-    WRITE_VALUE(ci->extra, ptrdiff_t);
+    /* CallInfo.extra is used in two contexts: if L->status == LUA_YIELD and
+     * CallInfo is the one stored as L->ci, in which case ci->extra refers to
+     * the original value of L->ci->func, and when we have a yieldable pcall
+     * (ci->callstatus & CIST_YPCALL) where ci->extra holds the stack level
+     * of the function being called (see lua_pcallk). We save the ci->extra
+     * for L->ci after the loop, because we won't know which one it is when
+     * unpersisting. */
+    if (ci->callstatus & CIST_YPCALL) {
+      WRITE_VALUE(ci->extra, ptrdiff_t);
+    }
 
     eris_assert(eris_isLua(ci) || (ci->callstatus & CIST_TAIL) == 0);
     if (ci->callstatus & CIST_HOOKYIELD) {
@@ -1302,6 +1321,10 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
 
     poppath(pi->L);
   }
+  /** See comment on ci->extra in loop. */
+  if (thread->status == LUA_YIELD) {
+    WRITE_VALUE(thread->ci->extra, ptrdiff_t);
+  }
   poppath(pi->L);
 
   pushpath(pi->L, ".openupval");
@@ -1309,7 +1332,7 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   level = 0;
   for (uv = eris_gco2uv(thread->openupval);
        uv != NULL;
-       uv = eris_gco2uv(gch(eris_obj2gco(uv))->next))
+       uv = eris_gco2uv(eris_gch(eris_obj2gco(uv))->next))
   {
     pushpath(pi->L, "[%d]", level);
     WRITE_VALUE(eris_savestack(thread, uv->v), size_t);
@@ -1387,9 +1410,15 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     validate(thread->ci->top, thread->stack_last);
     thread->ci->nresults = READ_VALUE(int16_t);
     thread->ci->callstatus = READ_VALUE(uint8_t);
-    thread->ci->extra = READ_VALUE(ptrdiff_t);
-    /* TODO I haven't quite figured out yet exactly when this is a used value
-    *       or just uninitialized junk (based on callstatus etc.) */
+    /** See comment in p_thread. */
+    if (thread->ci->callstatus & CIST_YPCALL) {
+      thread->ci->extra = READ_VALUE(ptrdiff_t);
+      o = eris_restorestack(thread, thread->ci->extra);
+      validate(o, thread->top);
+      if (eris_ttypenv(o) != LUA_TFUNCTION) {
+        eris_error(upi->L, "invalid callinfo");
+      }
+    }
 
     if (eris_isLua(thread->ci)) {
       LClosure *lcl = eris_ci_func(thread->ci);
@@ -1438,6 +1467,14 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     }
     else {
       thread->ci = eris_extendCI(thread);
+    }
+  }
+  if (thread->status == LUA_YIELD) {
+    thread->ci->extra = READ_VALUE(ptrdiff_t);
+    o = eris_restorestack(thread, thread->ci->extra);
+    validate(o, thread->top);
+    if (eris_ttypenv(o) != LUA_TFUNCTION) {
+      eris_error(upi->L, "invalid callinfo");
     }
   }
   poppath(upi->L);
@@ -1644,8 +1681,7 @@ u_permanent(UnpersistInfo *upi) {                         /* perms reftbl ... */
   }
   else if (lua_type(upi->L, -1) != type) {             /* perms reftbl ... :( */
     /* For the same reason that we cannot allow nil we must also require the
-     * unpersisted value to be of the correct type.
-     */
+     * unpersisted value to be of the correct type. */
     eris_error(upi->L, "bad permanent value (%s expected, got %s)",
       kTypenames[type], kTypenames[lua_type(upi->L, -1)]);
   }                                                   /* perms reftbl ... obj */
