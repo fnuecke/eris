@@ -85,7 +85,6 @@ if buf == nil then
 end
 
 infile:close()
-os.remove("test.eris")
 
 -------------------------------------------------------------------------------
 
@@ -99,3 +98,5 @@ uperms = {
 rootobj = eris.unpersist(uperms, buf)
 
 test(rootobj)
+
+os.remove("test.eris")

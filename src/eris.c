@@ -130,6 +130,12 @@ static const bool kGeneratePath = false;
 #define eris_init luaZ_init
 #define eris_read luaZ_read
 
+/* These are required for cross-platform support, since the size of TValue may
+ * differ, so the byte offset used by savestack/restorestack in Lua it is not a
+ * valid measure. */
+#define eris_savestackidx(L, p) ((p) - (L)->stack)
+#define eris_restorestackidx(L, n) ((L)->stack + (n))
+
 /* Enabled if we have a patched version of Lua (for accessing internals). */
 #if 1
 
@@ -214,6 +220,9 @@ static const char *const kTypenames[] = {
   "nil", "boolean", "lightuserdata", "number", "string",
   "table", "function", "userdata", "thread", "proto", "upval"
 };
+
+/* Header we prefix to persisted data for a quick check when unpersisting. */
+static const char *const kHeader = "ERIS";
 
 /* }======================================================================== */
 
@@ -341,14 +350,12 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
   if (pi->writer(pi->L, (value), (size), pi->ud)) \
     eris_error(pi->L, "could not write data"); }
 
-/* Writes a typed array with the specified length. */
-#define WRITE(value, length, type) \
-  WRITE_RAW((void*)(value), (length) * sizeof(type))
+/* Writes a single value with the specified type. */
+#define WRITE_VALUE(value, type) write_##type(pi, value)
 
-/* Writes a single value with the specified type. The value is cast to the
- * specified type if necessary before being written. */
-#define WRITE_VALUE(value, type) {\
-  type value_ = (type)(value); WRITE(&value_, 1, type); }
+/* Writes a typed array with the specified length. */
+#define WRITE(value, length, type) { \
+    int i; for (i = 0; i < length; ++i) WRITE_VALUE((value)[i], type); }
 
 /** ======================================================================== */
 
@@ -357,25 +364,148 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
   if (eris_read(&upi->zio, (value), (size))) \
     eris_error(upi->L, "could not read data"); }
 
-/* Reads a typed array with the specified length. */
-#define READ(value, length, type) \
-  READ_RAW((void*)(value), (length) * sizeof(type))
-
 /* Reads a single value with the specified type. */
 #define READ_VALUE(type) read_##type(upi)
 
-/* These are used by READ() and are the actual callbacks for the supported
- * types (i.e. the ones we need). It's just a choice of style. */
-#define READ_VALUE_T(type) static type read_##type(UnpersistInfo *upi) {\
-  type r; READ(&r, 1, type); return r; }
-READ_VALUE_T(uint8_t);
-READ_VALUE_T(uint16_t);
-READ_VALUE_T(int16_t);
-READ_VALUE_T(int);
-READ_VALUE_T(size_t);
-READ_VALUE_T(ptrdiff_t);
-READ_VALUE_T(lua_Number);
-#undef READ_VALUE_T
+/* Reads a typed array with the specified length. */
+#define READ(value, length, type) { \
+    int i; for (i = 0; i < length; ++i) (value)[i] = READ_VALUE(type); }
+
+/** ======================================================================== */
+
+#define eris_htons(x) x
+#define eris_htonl(x) x
+
+static void
+write_uint8_t(PersistInfo *pi, uint8_t value) {
+  WRITE_RAW(&value, sizeof(uint8_t));
+}
+
+static void
+write_uint16_t(PersistInfo *pi, uint16_t value) {
+  value = eris_htons(value);
+  WRITE_RAW(&value, sizeof(uint16_t));
+}
+
+static void
+write_uint32_t(PersistInfo *pi, uint32_t value) {
+  value = eris_htonl(value);
+  WRITE_RAW(&value, sizeof(uint32_t));
+}
+
+static void
+write_int16_t(PersistInfo *pi, int16_t value) {
+  write_uint16_t(pi, (uint16_t)value);
+}
+
+static void
+write_int32_t(PersistInfo *pi, int32_t value) {
+  write_uint32_t(pi, (uint32_t)value);
+}
+
+static void
+write_int(PersistInfo *pi, int value) {
+  if (sizeof(int) == sizeof(int32_t)) {
+    write_int32_t(pi, (int32_t)value);
+  }
+  else {
+    int32_t pvalue = (int32_t)value;
+    if ((int)pvalue != value) {
+      eris_error(pi->L, "value too large, would get truncated");
+    }
+    write_int32_t(pi, pvalue);
+  }
+}
+
+static void
+write_size_t(PersistInfo *pi, size_t value) {
+  if (sizeof(size_t) == sizeof(uint32_t)) {
+    write_uint32_t(pi, (uint32_t)value);
+  }
+  else {
+    uint32_t pvalue = (uint32_t)value;
+    if ((size_t)pvalue != value) {
+      eris_error(pi->L, "value too large, would get truncated");
+    }
+    write_uint32_t(pi, pvalue);
+  }
+}
+
+static void
+write_Instruction(PersistInfo *pi, Instruction value) {
+  if (sizeof(Instruction) == sizeof(uint32_t)) {
+    write_uint32_t(pi, (uint32_t)value);
+  }
+  else {
+    uint32_t pvalue = (uint32_t)value;
+    eris_assert((Instruction)pvalue == value);
+    write_uint32_t(pi, pvalue);
+  }
+}
+
+static void
+write_lua_Number(PersistInfo *pi, lua_Number value) {
+  double pvalue = (double)value;
+  WRITE_RAW(&pvalue, sizeof(double));
+}
+
+/** ======================================================================== */
+
+#define eris_ntohs(x) x
+#define eris_ntohl(x) x
+
+static uint8_t
+read_uint8_t(UnpersistInfo *upi) {
+  uint8_t value;
+  READ_RAW(&value, sizeof(uint8_t));
+  return value;
+}
+
+static uint16_t
+read_uint16_t(UnpersistInfo *upi) {
+  uint16_t value;
+  READ_RAW(&value, sizeof(uint16_t));
+  return eris_ntohs(value);
+}
+
+static uint32_t
+read_uint32_t(UnpersistInfo *upi) {
+  uint32_t value;
+  READ_RAW(&value, sizeof(uint32_t));
+  return eris_ntohl(value);
+}
+
+static int16_t
+read_int16_t(UnpersistInfo *upi) {
+  return (int16_t)read_uint16_t(upi);
+}
+
+static int32_t
+read_int32_t(UnpersistInfo *upi) {
+  return (int32_t)read_uint32_t(upi);
+}
+
+static int
+read_int(UnpersistInfo *upi) {
+  return (int)read_int32_t(upi);
+}
+
+static size_t
+read_size_t(UnpersistInfo *upi) {
+  return (size_t)read_uint32_t(upi);
+}
+
+static Instruction
+read_Instruction(UnpersistInfo *upi) {
+  return (Instruction)read_uint32_t(upi);
+}
+
+static lua_Number
+read_lua_Number(UnpersistInfo *upi) {
+  double value;
+  READ_RAW(&value, sizeof(double));
+  return (lua_Number)value;
+}
 
 /** ======================================================================== */
 
@@ -407,7 +537,7 @@ u_boolean(UnpersistInfo *upi) {                                        /* ... */
 
 static void
 p_pointer(PersistInfo *pi) {                                    /* ... ludata */
-  WRITE_VALUE(lua_touserdata(pi->L, -1), size_t);
+  WRITE_VALUE((size_t)lua_touserdata(pi->L, -1), size_t);
 }
 
 static void
@@ -440,7 +570,7 @@ p_string(PersistInfo *pi) {                                        /* ... str */
   size_t length;
   const char *value = lua_tolstring(pi->L, -1, &length);
   WRITE_VALUE(length, size_t);
-  WRITE(value, length, char);
+  WRITE_RAW(value, length);
 }
 
 static void
@@ -450,7 +580,7 @@ u_string(UnpersistInfo *upi) {                                         /* ... */
     /* TODO Can we avoid this copy somehow? (Without it getting too nasty) */
     const size_t length = READ_VALUE(size_t);
     char *value = lua_newuserdata(upi->L, length * sizeof(char));  /* ... tmp */
-    READ(value, length, char);
+    READ_RAW(value, length);
     lua_pushlstring(upi->L, value, length);                    /* ... tmp str */
     lua_replace(upi->L, -2);                                       /* ... str */
   }
@@ -1274,8 +1404,8 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   eris_assert(&thread->base_ci != thread->ci->next);
   for (ci = &thread->base_ci; ci != thread->ci->next; ci = ci->next) {
     pushpath(pi->L, "[%d]", level++);
-    WRITE_VALUE(eris_savestack(thread, ci->func), size_t);
-    WRITE_VALUE(eris_savestack(thread, ci->top), size_t);
+    WRITE_VALUE(eris_savestackidx(thread, ci->func), size_t);
+    WRITE_VALUE(eris_savestackidx(thread, ci->top), size_t);
     WRITE_VALUE(ci->nresults, int16_t);
     WRITE_VALUE(ci->callstatus, uint8_t);
     /* CallInfo.extra is used in two contexts: if L->status == LUA_YIELD and
@@ -1286,7 +1416,8 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
      * for L->ci after the loop, because we won't know which one it is when
      * unpersisting. */
     if (ci->callstatus & CIST_YPCALL) {
-      WRITE_VALUE(ci->extra, ptrdiff_t);
+      WRITE_VALUE(eris_savestackidx(thread,
+        eris_restorestack(thread, ci->extra)), size_t);
     }
 
     eris_assert(eris_isLua(ci) || (ci->callstatus & CIST_TAIL) == 0);
@@ -1296,7 +1427,7 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
 
     if (eris_isLua(ci)) {
       const LClosure *lcl = eris_ci_func(ci);
-      WRITE_VALUE(eris_savestack(thread, ci->u.l.base), size_t);
+      WRITE_VALUE(eris_savestackidx(thread, ci->u.l.base), size_t);
       WRITE_VALUE(ci->u.l.savedpc - lcl->p->code, size_t);
     }
     else {
@@ -1323,7 +1454,8 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   }
   /** See comment on ci->extra in loop. */
   if (thread->status == LUA_YIELD) {
-    WRITE_VALUE(thread->ci->extra, ptrdiff_t);
+    WRITE_VALUE(eris_savestackidx(thread,
+        eris_restorestack(thread, thread->ci->extra)), size_t);
   }
   poppath(pi->L);
 
@@ -1335,13 +1467,13 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
        uv = eris_gco2uv(eris_gch(eris_obj2gco(uv))->next))
   {
     pushpath(pi->L, "[%d]", level);
-    WRITE_VALUE(eris_savestack(thread, uv->v), size_t);
+    WRITE_VALUE(eris_savestackidx(thread, uv->v) + 1, size_t);
     eris_setobj(pi->L, pi->L->top - 1, uv->v);              /* ... thread obj */
     lua_pushlightuserdata(pi->L, uv);                    /* ... thread obj id */
     persist_keyed(pi, LUA_TUPVAL);                          /* ... thread obj */
     poppath(pi->L);
   }
-  WRITE_VALUE((size_t)-1, size_t);
+  WRITE_VALUE(0, size_t);
   lua_pop(pi->L, 1);                                            /* ... thread */
   poppath(pi->L);
 }
@@ -1404,15 +1536,16 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
   level = 0;
   for (;;) {
     pushpath(upi->L, "[%d]", level++);
-    thread->ci->func = eris_restorestack(thread, READ_VALUE(size_t));
+    thread->ci->func = eris_restorestackidx(thread, READ_VALUE(size_t));
     validate(thread->ci->func, thread->top - 1);
-    thread->ci->top = eris_restorestack(thread, READ_VALUE(size_t));
+    thread->ci->top = eris_restorestackidx(thread, READ_VALUE(size_t));
     validate(thread->ci->top, thread->stack_last);
     thread->ci->nresults = READ_VALUE(int16_t);
     thread->ci->callstatus = READ_VALUE(uint8_t);
     /** See comment in p_thread. */
     if (thread->ci->callstatus & CIST_YPCALL) {
-      thread->ci->extra = READ_VALUE(ptrdiff_t);
+      thread->ci->extra = eris_savestack(thread,
+        eris_restorestackidx(thread, READ_VALUE(size_t)));
       o = eris_restorestack(thread, thread->ci->extra);
       validate(o, thread->top);
       if (eris_ttypenv(o) != LUA_TFUNCTION) {
@@ -1422,7 +1555,7 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
 
     if (eris_isLua(thread->ci)) {
       LClosure *lcl = eris_ci_func(thread->ci);
-      thread->ci->u.l.base = eris_restorestack(thread, READ_VALUE(size_t));
+      thread->ci->u.l.base = eris_restorestackidx(thread, READ_VALUE(size_t));
       validate(thread->ci->u.l.base, thread->top);
       thread->ci->u.l.savedpc = lcl->p->code + READ_VALUE(size_t);
       if (thread->ci->u.l.savedpc < lcl->p->code ||
@@ -1470,7 +1603,8 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     }
   }
   if (thread->status == LUA_YIELD) {
-    thread->ci->extra = READ_VALUE(ptrdiff_t);
+    thread->ci->extra = eris_savestack(thread,
+      eris_restorestackidx(thread, READ_VALUE(size_t)));
     o = eris_restorestack(thread, thread->ci->extra);
     validate(o, thread->top);
     if (eris_ttypenv(o) != LUA_TFUNCTION) {
@@ -1490,13 +1624,13 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     UpVal *nuv;
     StkId stk;
     /* Get the position of the upvalue on the stack. As a special value we pass
-     * -1 to indicate there are no more upvalues. */
+     * zero to indicate there are no more upvalues. */
     const size_t offset = READ_VALUE(size_t);
-    if (offset == (size_t)-1) {
+    if (offset == 0) {
       break;
     }
     pushpath(upi->L, "[%d]", level);
-    stk = eris_restorestack(thread, offset);
+    stk = eris_restorestackidx(thread, offset - 1);
     validate(stk, thread->top - 1);
     unpersist(upi);                                         /* ... thread tbl */
     eris_assert(lua_type(upi->L, -1) == LUA_TTABLE);
@@ -1827,25 +1961,15 @@ reader(lua_State *L, void *ud, size_t *sz) {
 
 static void
 p_header(PersistInfo *pi) {
-  WRITE_VALUE(sizeof(int), uint8_t);
-  WRITE_VALUE(sizeof(size_t), uint8_t);
-  WRITE_VALUE(sizeof(ptrdiff_t), uint8_t);
-  WRITE_VALUE(sizeof(lua_Number), uint8_t);
+  WRITE_RAW(kHeader, 4);
 }
 
 static void
 u_header(UnpersistInfo *upi) {
-  size_t sizeOfInt = READ_VALUE(uint8_t);
-  size_t sizeOfSizeT = READ_VALUE(uint8_t);
-  size_t sizeOfPtrDiffT = READ_VALUE(uint8_t);
-  size_t sizeOfLuaNumber = READ_VALUE(uint8_t);
-
-  if (sizeOfInt != sizeof(int) ||
-      sizeOfSizeT != sizeof(size_t) ||
-      sizeOfPtrDiffT != sizeof(ptrdiff_t) ||
-      sizeOfLuaNumber != sizeof(lua_Number))
-  {
-    luaL_error(upi->L, "Data was persisted on incompatible platform.");
+  char header[4];
+  READ_RAW(header, 4);
+  if (strncmp(kHeader, header, 4)) {
+    luaL_error(upi->L, "Invalid data.");
   }
 }
 
