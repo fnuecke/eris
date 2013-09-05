@@ -123,6 +123,13 @@ Another concept carried over from Pluto is "special persistence". Tables and use
   Also from the Pluto documentation:
   > It is important that the fixup closure returned not reference the original table directly, as that table would again be persisted as an upvalue, leading to an infinite loop. Also note that the object's metatable is *not* automatically persisted; it is necessary for the fixup closure to reset it, if it wants.
 
+Cross-platform compatibility
+============================
+
+All persisted data is stored as it would be "native" for a 32 bit little endian machine, and loaded as is appropriate for the machine it is loaded on, so Eris should be largely cross-platform compatible. However, there is *no* test for value truncation when loading data on 16 bit systems. If you need this, feel free to patch it and submit a pull request. Also note that only little and big endian are supported and that in extreme cases values on 64bit machines may get too large so that saving becomes impossible due to truncation (in which case Eris will throw an error). The only scenario for the latter I can think of is an insanely large stack, though.
+
+If you need more control over how things are persisted on your system: it should be relatively easy to adjust Eris in that regard, since reading and writing of the different elementary types is already split up into a couple of functions (e.g. `write_int`, `write_size_t` for truncation checks, `write_uint16_t` and `write_uint32_t` for custom endianness).
+
 Limitations
 ===========
 

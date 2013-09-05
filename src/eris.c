@@ -373,8 +373,46 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
 
 /** ======================================================================== */
 
-#define eris_htons(x) x
-#define eris_htonl(x) x
+/* Endianness based swapping of shorts and ints. If you have some esotheric
+ * system that's neither little nor big endian you can define the macros
+ * `eris_swaps` and `eris_swapl`, pointing to functions doing the swapping to
+ * and from little endian (which is how persisted data is stored). */
+#if !defined(eris_swaps) || !defined(eris_swapl)
+#include "eris_endian.h"
+#endif
+
+#if !defined(eris_swaps)
+#if defined(ERIS_LITTLE_ENDIAN)
+
+#define eris_swaps(value) value
+
+#elif defined(ERIS_BIG_ENDIAN)
+
+#define eris_swaps(value) ((value >> 8) | (value << 8))
+
+#endif
+#endif
+
+#if !defined(eris_swapl)
+#if defined(ERIS_LITTLE_ENDIAN)
+
+#define eris_swapl(value) value
+
+#elif defined(ERIS_BIG_ENDIAN)
+
+static uint32_t
+eris_swapl(uint32_t value) {
+  /* 1234 -> 2143 */
+  value = ((value >> 8) & 0x00FF00FF) |
+          ((value << 8) & 0xFF00FF00);
+  /* 2143 -> 4321 */
+  return (value >> 16) | (value << 16);
+}
+
+#endif
+#endif
+
+/** ======================================================================== */
 
 static void
 write_uint8_t(PersistInfo *pi, uint8_t value) {
@@ -383,13 +421,13 @@ write_uint8_t(PersistInfo *pi, uint8_t value) {
 
 static void
 write_uint16_t(PersistInfo *pi, uint16_t value) {
-  value = eris_htons(value);
+  value = eris_swaps(value);
   WRITE_RAW(&value, sizeof(uint16_t));
 }
 
 static void
 write_uint32_t(PersistInfo *pi, uint32_t value) {
-  value = eris_htonl(value);
+  value = eris_swapl(value);
   WRITE_RAW(&value, sizeof(uint32_t));
 }
 
@@ -451,9 +489,6 @@ write_lua_Number(PersistInfo *pi, lua_Number value) {
 
 /** ======================================================================== */
 
-#define eris_ntohs(x) x
-#define eris_ntohl(x) x
-
 static uint8_t
 read_uint8_t(UnpersistInfo *upi) {
   uint8_t value;
@@ -465,14 +500,14 @@ static uint16_t
 read_uint16_t(UnpersistInfo *upi) {
   uint16_t value;
   READ_RAW(&value, sizeof(uint16_t));
-  return eris_ntohs(value);
+  return eris_swaps(value);
 }
 
 static uint32_t
 read_uint32_t(UnpersistInfo *upi) {
   uint32_t value;
   READ_RAW(&value, sizeof(uint32_t));
-  return eris_ntohl(value);
+  return eris_swapl(value);
 }
 
 static int16_t

@@ -23,6 +23,9 @@ THE SOFTWARE.
 
 /* lua.h must be included before this file */
 
+#ifndef ERIS_H
+#define ERIS_H
+
 /*
 ** ==================================================================
 ** API
@@ -102,3 +105,6 @@ LUA_API void eris_unpersist(lua_State* L, int perms, int value);
  *     If only one value is given, the perms table is assumed to be empty.
  */
 LUA_API int luaopen_eris(lua_State* L);
+
+#endif
+
