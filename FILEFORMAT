@@ -73,7 +73,7 @@ struct Number {
 
 struct String {
     uint32_t length;    /* The length of the string */
-    char str[length];   /* The actual string (not null terminated) */
+    char str[length];   /* The actual string (not always null terminated) */
 };
 
 struct Table {
@@ -122,6 +122,8 @@ struct CClosure {
     Object f;           /* The actual C function. Must be available via the
                          * permanents table on persist and unpersist. */
     Object upvals[Closure.nups]; /* All upvalues */
+    /* Note that here the upvalues are the actual objects, i.e. these are not
+     * of type LUA_TUPVAL, since C closures' upalues are always closed. */
 };
 
 struct LClosure {
