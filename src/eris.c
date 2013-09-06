@@ -23,6 +23,7 @@ THE SOFTWARE.
 
 /* Standard library headers. */
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -373,47 +374,6 @@ eris_error(lua_State* L, const char *fmt, ...) {    /* perms reftbl path? ... */
 
 /** ======================================================================== */
 
-/* Endianness based swapping of shorts and ints. If you have some esotheric
- * system that's neither little nor big endian you can define the macros
- * `eris_swaps` and `eris_swapl`, pointing to functions doing the swapping to
- * and from little endian (which is how persisted data is stored). */
-#if !defined(eris_swaps) || !defined(eris_swapl)
-#include "eris_endian.h"
-#endif
-
-#if !defined(eris_swaps)
-#if defined(ERIS_LITTLE_ENDIAN)
-
-#define eris_swaps(value) value
-
-#elif defined(ERIS_BIG_ENDIAN)
-
-#define eris_swaps(value) ((value >> 8) | (value << 8))
-
-#endif
-#endif
-
-#if !defined(eris_swapl)
-#if defined(ERIS_LITTLE_ENDIAN)
-
-#define eris_swapl(value) value
-
-#elif defined(ERIS_BIG_ENDIAN)
-
-static uint32_t
-eris_swapl(uint32_t value) {
-  /* 1234 -> 2143 */
-  value = ((value >> 8) & 0x00FF00FF) |
-          ((value << 8) & 0xFF00FF00);
-  /* 2143 -> 4321 */
-  return (value >> 16) | (value << 16);
-}
-
-#endif
-#endif
-
-/** ======================================================================== */
-
 static void
 write_uint8_t(PersistInfo *pi, uint8_t value) {
   WRITE_RAW(&value, sizeof(uint8_t));
@@ -421,14 +381,28 @@ write_uint8_t(PersistInfo *pi, uint8_t value) {
 
 static void
 write_uint16_t(PersistInfo *pi, uint16_t value) {
-  value = eris_swaps(value);
-  WRITE_RAW(&value, sizeof(uint16_t));
+  write_uint8_t(pi, value >> 8);
+  write_uint8_t(pi, value);
 }
 
 static void
 write_uint32_t(PersistInfo *pi, uint32_t value) {
-  value = eris_swapl(value);
-  WRITE_RAW(&value, sizeof(uint32_t));
+  write_uint8_t(pi, value >> 24);
+  write_uint8_t(pi, value >> 16);
+  write_uint8_t(pi, value >> 8);
+  write_uint8_t(pi, value);
+}
+
+static void
+write_uint64_t(PersistInfo *pi, uint64_t value) {
+  write_uint8_t(pi, value >> 56);
+  write_uint8_t(pi, value >> 48);
+  write_uint8_t(pi, value >> 40);
+  write_uint8_t(pi, value >> 32);
+  write_uint8_t(pi, value >> 24);
+  write_uint8_t(pi, value >> 16);
+  write_uint8_t(pi, value >> 8);
+  write_uint8_t(pi, value);
 }
 
 static void
@@ -476,6 +450,7 @@ write_Instruction(PersistInfo *pi, Instruction value) {
   }
   else {
     uint32_t pvalue = (uint32_t)value;
+    /* Lua only uses 32 bits for its instructions. */
     eris_assert((Instruction)pvalue == value);
     write_uint32_t(pi, pvalue);
   }
@@ -483,8 +458,19 @@ write_Instruction(PersistInfo *pi, Instruction value) {
 
 static void
 write_lua_Number(PersistInfo *pi, lua_Number value) {
-  double pvalue = (double)value;
-  WRITE_RAW(&pvalue, sizeof(double));
+  if (sizeof(lua_Number) == sizeof(uint32_t)) {
+    uint32_t rep;
+    memcpy(&rep, &value, sizeof(lua_Number));
+    write_uint32_t(pi, rep);
+  }
+  else if (sizeof(lua_Number) == sizeof(uint64_t)) {
+    uint64_t rep;
+    memcpy(&rep, &value, sizeof(lua_Number));
+    write_uint64_t(pi, rep);
+  }
+  else {
+    assert(!"Unsupported floating point type for lua_Number.");
+  }
 }
 
 /** ======================================================================== */
@@ -498,16 +484,28 @@ read_uint8_t(UnpersistInfo *upi) {
 
 static uint16_t
 read_uint16_t(UnpersistInfo *upi) {
-  uint16_t value;
-  READ_RAW(&value, sizeof(uint16_t));
-  return eris_swaps(value);
+  return ((uint16_t)read_uint8_t(upi) << 8) |
+          (uint16_t)read_uint8_t(upi);
 }
 
 static uint32_t
 read_uint32_t(UnpersistInfo *upi) {
-  uint32_t value;
-  READ_RAW(&value, sizeof(uint32_t));
-  return eris_swapl(value);
+  return ((uint32_t)read_uint8_t(upi) << 24) |
+         ((uint32_t)read_uint8_t(upi) << 16) |
+         ((uint32_t)read_uint8_t(upi) << 8) |
+          (uint32_t)read_uint8_t(upi);
+}
+
+static uint64_t
+read_uint64_t(UnpersistInfo *upi) {
+  return ((uint64_t)read_uint8_t(upi) << 56) |
+         ((uint64_t)read_uint8_t(upi) << 48) |
+         ((uint64_t)read_uint8_t(upi) << 40) |
+         ((uint64_t)read_uint8_t(upi) << 32) |
+         ((uint64_t)read_uint8_t(upi) << 24) |
+         ((uint64_t)read_uint8_t(upi) << 16) |
+         ((uint64_t)read_uint8_t(upi) << 8) |
+          (uint64_t)read_uint8_t(upi);
 }
 
 static int16_t
@@ -522,12 +520,32 @@ read_int32_t(UnpersistInfo *upi) {
 
 static int
 read_int(UnpersistInfo *upi) {
-  return (int)read_int32_t(upi);
+  if (sizeof(int) == sizeof(int32_t)) {
+    return (int)read_int32_t(upi);
+  }
+  else {
+    int32_t pvalue = read_int32_t(upi);
+    int value = (int)pvalue;
+    if ((int32_t)value != pvalue) {
+      eris_error(upi->L, "value too large, would get truncated");
+    }
+    return value;
+  }
 }
 
 static size_t
 read_size_t(UnpersistInfo *upi) {
-  return (size_t)read_uint32_t(upi);
+  if (sizeof(size_t) == sizeof(uint32_t)) {
+    return (size_t)read_uint32_t(upi);
+  }
+  else {
+    uint32_t pvalue = read_uint32_t(upi);
+    size_t value = (size_t)pvalue;
+    if ((uint32_t)value != pvalue) {
+      eris_error(upi->L, "value too large, would get truncated");
+    }
+    return value;
+  }
 }
 
 static Instruction
@@ -537,9 +555,19 @@ read_Instruction(UnpersistInfo *upi) {
 
 static lua_Number
 read_lua_Number(UnpersistInfo *upi) {
-  double value;
-  READ_RAW(&value, sizeof(double));
-  return (lua_Number)value;
+  lua_Number value;
+  if (sizeof(lua_Number) == sizeof(uint32_t)) {
+    uint32_t rep = read_uint32_t(upi);
+    memcpy(&value, &rep, sizeof(lua_Number));
+  }
+  else if (sizeof(lua_Number) == sizeof(uint64_t)) {
+    uint64_t rep = read_uint64_t(upi);
+    memcpy(&value, &rep, sizeof(lua_Number));
+  }
+  else {
+    assert(!"Unsupported floating point type for lua_Number.");
+  }
+  return value;
 }
 
 /** ======================================================================== */
@@ -1997,6 +2025,8 @@ reader(lua_State *L, void *ud, size_t *sz) {
 static void
 p_header(PersistInfo *pi) {
   WRITE_RAW(kHeader, 4);
+  write_uint8_t(pi, sizeof(lua_Number));
+  write_lua_Number(pi, -1.234567890);
 }
 
 static void
@@ -2005,6 +2035,12 @@ u_header(UnpersistInfo *upi) {
   READ_RAW(header, 4);
   if (strncmp(kHeader, header, 4)) {
     luaL_error(upi->L, "Invalid data.");
+  }
+  if (read_uint8_t(upi) != sizeof(lua_Number)) {
+    luaL_error(upi->L, "Incompatible floating point type.");
+  }
+  if (fabs(read_lua_Number(upi) + 1.234567890) > 10e-6) {
+    luaL_error(upi->L, "Incompatible floating point representation.");
   }
 }
 

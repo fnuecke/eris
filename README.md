@@ -126,9 +126,14 @@ Another concept carried over from Pluto is "special persistence". Tables and use
 Cross-platform compatibility
 ============================
 
-All persisted data is stored as it would be "native" for a 32 bit little endian machine, and loaded as is appropriate for the machine it is loaded on, so Eris should be largely cross-platform compatible. However, there is *no* test for value truncation when loading data on 16 bit systems. If you need this, feel free to patch it and submit a pull request. Also note that only little and big endian are supported and that in extreme cases values on 64bit machines may get too large so that saving becomes impossible due to truncation (in which case Eris will throw an error). The only scenario for the latter I can think of is an insanely large stack, though.
+All persisted data is stored the same, regardless of the machine it is being written on, and loaded as is appropriate for the machine it is loaded on, so Eris should be largely cross-platform compatible.
 
-If you need more control over how things are persisted on your system: it should be relatively easy to adjust Eris in that regard, since reading and writing of the different elementary types is already split up into a couple of functions (e.g. `write_int`, `write_size_t` for truncation checks, `write_uint16_t` and `write_uint32_t` for custom endianness).
+There are three components to this: byte order (little endian, big endian, ...), architecture (16 Bit, 32 Bit, 64 Bit) and floating point representation.
+- The way values are persisted is endian-agnostic (big endianness tested on a [MIPS Debian][mips] running in [QEMU][]). Note that the testcase for literal userdata persistence fails when performed cross-platform. This is to be expected, since that data is actually an integer and Eris has no concept of the actual data stored in a userdatum.
+- All potentially architecture-specific values are persisted as 32-bit values (`int`, `size_t` and `Instruction`). This means data can get truncated either when persisting data on a 64-bit machine, or when unpersisting data on a 16-bit machine. If there is data loss due to this, Eris will throw an error. At least errors when persisting on 64-bit machines should be quite unlikely, however, since usually `int` will still be 4 bytes long, and `size_t` is almost exclusively used for stack size and locations, and the maximum stack size is usually smaller than the maximum value of a 32-bit unsigned integer. What *could* be an issue, is light userdata, since that, too is stored as 32-bit. You won't be able to persist light userdata if you use its full 64 bits on a 64-bit machine.
+- The binary floating point representation is expected to be the same on all systems sharing persisted data, which will usually be [IEEE 754][floats]. Also, all systems have to use the same type, i.e. `float` or `double`. You cannot load data persisted from a Lua installation using `float` into one that uses `double`. Eris performs a small check as part of its header and if the local model is incompatible to the data it will throw an error.
+
+If you need more control over how things are persisted on your system: it should be relatively easy to adjust Eris in that regard, since reading and writing of the different elementary types is already split up into a couple of functions.
 
 Limitations
 ===========
@@ -172,3 +177,6 @@ Quite obviously most design choices were taken from Pluto, partially to make it 
 
 
 [Pluto]: https://github.com/hoelzro/pluto
+[mips]: http://people.debian.org/~aurel32/qemu/mips/
+[QEMU]: http://qemu.org/
+[floats]: http://en.wikipedia.org/wiki/IEEE_floating_point

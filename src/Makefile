@@ -184,4 +184,4 @@ lvm.o: lvm.c lua.h luaconf.h ldebug.h lstate.h lobject.h llimits.h ltm.h \
 lzio.o: lzio.c lua.h luaconf.h llimits.h lmem.h lstate.h lobject.h ltm.h \
  lzio.h
 eris.o: eris.c lua.h lauxlib.h lualib.h ldebug.h ldo.h lfunc.h lobject.h \
- lstate.h lstring.h lzio.h eris.h eris_endian.h
+ lstate.h lstring.h lzio.h eris.h
