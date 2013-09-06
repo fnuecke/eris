@@ -160,7 +160,7 @@ extern void eris_permstrlib(lua_State *L, bool forUnpersist);
 #else
 
 /* Does nothing if we don't have a patched version of Lua. */
-#define populateperms(L, forUnpersist) /* nothing */
+#define populateperms(L, forUnpersist) ((void)0)
 
 #endif
 
@@ -302,6 +302,9 @@ poppath(lua_State* L) {                              /* perms reftbl path ... */
  * keeps the stack small, so it's better this way. */
 static const char*
 path(lua_State* L) {                                 /* perms reftbl path ... */
+  if(!kGeneratePath) {
+    return "";
+  }
   eris_checkstack(L, 3);
   lua_pushstring(L, "");                         /* perms reftbl path ... str */
   lua_pushnil(L);                            /* perms reftbl path ... str nil */
@@ -1412,30 +1415,6 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
     return; /* not reached */
   }
 
-  /* If the thread isn't running this must be the default value, which is 1. */
-  eris_assert(thread->nny == 1);
-
-  /* Error jump info should only be set while thread is running. */
-  eris_assert(thread->errorJmp == NULL);
-  eris_assert(thread->errfunc == 0);
-
-  /* thread->oldpc always seems to be uninitialized, at least gdb always shows
-   * it as 0xbaadf00d when I set a breakpoint here. */
-
-  /* Write general information. */
-  WRITE_VALUE(thread->status, uint8_t);
-  WRITE_VALUE(thread->nCcalls, uint16_t);
-  WRITE_VALUE(thread->allowhook, uint8_t);
-
-  /* Hooks are not supported, bloody can of worms, those.
-  WRITE_VALUE(thread->hookmask, uint8_t);
-  WRITE_VALUE(thread->basehookcount, int);
-  WRITE_VALUE(thread->hookcount, int); */
-
-  if (thread->hook) {
-    /* TODO Warn that hooks are not persisted? */
-  }
-
   /* Persist the stack. Save the total size and used space first. */
   WRITE_VALUE(thread->stacksize, int);
   WRITE_VALUE(thread->top - thread->stack, size_t);
@@ -1455,6 +1434,32 @@ p_thread(PersistInfo *pi) {                                     /* ... thread */
   }
   lua_pop(pi->L, 1);                                            /* ... thread */
   poppath(pi->L);
+
+  /* If the thread isn't running this must be the default value, which is 1. */
+  eris_assert(thread->nny == 1);
+
+  /* Error jump info should only be set while thread is running. */
+  eris_assert(thread->errorJmp == NULL);
+
+  /* thread->oldpc always seems to be uninitialized, at least gdb always shows
+   * it as 0xbaadf00d when I set a breakpoint here. */
+
+  /* Write general information. */
+  WRITE_VALUE(thread->status, uint8_t);
+  WRITE_VALUE(eris_savestackidx(thread,
+    eris_restorestack(thread, thread->errfunc)), size_t);
+  /* These are only used while a thread is being executed or can be deduced:
+  WRITE_VALUE(thread->nCcalls, uint16_t);
+  WRITE_VALUE(thread->allowhook, uint8_t); */
+
+  /* Hooks are not supported, bloody can of worms, those.
+  WRITE_VALUE(thread->hookmask, uint8_t);
+  WRITE_VALUE(thread->basehookcount, int);
+  WRITE_VALUE(thread->hookcount, int); */
+
+  if (thread->hook) {
+    /* TODO Warn that hooks are not persisted? */
+  }
 
   /* Write call information (stack frames). In 5.2 CallInfo is stored in a
    * linked list that originates in thead.base_ci. Upon initialization the
@@ -1557,25 +1562,6 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
 
   registerobject(upi);
 
-  /* As in p_thread, just to make sure. */
-  eris_assert(thread->nny == 1);
-  eris_assert(thread->errorJmp == NULL);
-  eris_assert(thread->errfunc == 0);
-  eris_assert(thread->hook == NULL);
-
-  /* See comment in persist. */
-  thread->oldpc = NULL;
-
-  /* Read general information. */
-  thread->status = READ_VALUE(uint8_t);
-  thread->nCcalls = READ_VALUE(uint16_t);
-  thread->allowhook = READ_VALUE(uint8_t);
-
-  /* Not supported.
-  thread->hookmask = READ_VALUE(uint8_t);
-  thread->basehookcount = READ_VALUE(int);
-  thread->hookcount = READ_VALUE(int); */
-
   /* Unpersist the stack. Read size first and adjust accordingly. */
   eris_reallocstack(thread, READ_VALUE(int));
   thread->top = thread->stack + READ_VALUE(size_t);
@@ -1592,6 +1578,35 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     poppath(upi->L);
   }
   poppath(upi->L);
+
+  /* As in p_thread, just to make sure. */
+  eris_assert(thread->nny == 1);
+  eris_assert(thread->errorJmp == NULL);
+  eris_assert(thread->hook == NULL);
+
+  /* See comment in persist. */
+  thread->oldpc = NULL;
+
+  /* Read general information. */
+  thread->status = READ_VALUE(uint8_t);
+  thread->errfunc = eris_savestack(thread,
+    eris_restorestackidx(thread, READ_VALUE(size_t)));
+  if (thread->errfunc) {
+    o = eris_restorestack(thread, thread->errfunc);
+    validate(o, thread->top);
+    if (eris_ttypenv(o) != LUA_TFUNCTION) {
+      eris_error(upi->L, "invalid errfunc");
+    }
+  }
+  /* These are only used while a thread is being executed or can be deduced:
+  thread->nCcalls = READ_VALUE(uint16_t);
+  thread->allowhook = READ_VALUE(uint8_t); */
+  eris_assert(thread->allowhook == 1);
+
+  /* Not supported.
+  thread->hookmask = READ_VALUE(uint8_t);
+  thread->basehookcount = READ_VALUE(int);
+  thread->hookcount = READ_VALUE(int); */
 
   /* Read call information (stack frames). */
   pushpath(upi->L, ".callinfo");
@@ -1675,6 +1690,9 @@ u_thread(UnpersistInfo *upi) {                                         /* ... */
     }
   }
   poppath(upi->L);
+
+  /* Get from context: only zero for dead threads, otherwise one. */
+  thread->nCcalls = thread->status != LUA_OK || lua_gettop(thread) != 0;
 
   /* Proceed to open upvalues. These upvalues will already exist due to the
    * functions using them having been unpersisted (they'll usually be in the

@@ -144,7 +144,8 @@ Limitations
 * Metatables of basic types are not persisted. A workaround may be to add a dummy table with a `__persist` callback, which in turn stores these metatables, reinstalls them and returns a dummy table upon unpersisting.
 * Neither the thread running Eris nor its parents can be persisted. More generally: no *running* thread can be persisted, only suspended ones - either because they were not started yet, or because they yielded.
 * Threads that yielded out of a hook function cannot be persisted. I have not even tested this, since this seems to only be possible for certain hooks (line and count) and when the hook function yields from C itself.
-* When the loaded data contains functions, this is like loading binary code, and may therefore be potentially unsafe. You should only unpersist trusted data.
+* When the loaded data contains functions, this is like loading compiled code, and may therefore be potentially unsafe. You should only unpersist trusted data.
+* Loops in the permanent value table (e.g. `{a = "b", b = "a"}`) will result in an infinite loop when persisting. Make sure there aren't any.
 
 Core library
 ============
