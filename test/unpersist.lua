@@ -74,7 +74,7 @@ end
 
 -------------------------------------------------------------------------------
 
-infile, err = io.open("test.eris", "rb")
+infile, err = io.open(..., "rb")
 if infile == nil then
   error("While opening: " .. (err or "unknown error"))
 end
@@ -99,4 +99,4 @@ rootobj = eris.unpersist(uperms, buf)
 
 test(rootobj)
 
-os.remove("test.eris")
+os.remove(...)

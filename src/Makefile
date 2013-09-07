@@ -41,8 +41,14 @@ LUA_O=	lua.o
 LUAC_T=	luac
 LUAC_O=	luac.o
 
-ALL_O= $(BASE_O) $(LUA_O) $(LUAC_O)
-ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T)
+TESTP_T= ../test/persist
+TESTP_O= ../test/persist.o
+
+TESTUP_T= ../test/unpersist
+TESTUP_O= ../test/unpersist.o
+
+ALL_O= $(BASE_O) $(LUA_O) $(LUAC_O) $(TESTP_O) $(TESTUP_O)
+ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T) $(TESTP_T) $(TESTUP_T)
 ALL_A= $(LUA_A)
 
 # Targets start here.
@@ -63,6 +69,18 @@ $(LUA_T): $(LUA_O) $(LUA_A)
 
 $(LUAC_T): $(LUAC_O) $(LUA_A)
 	$(CC) -o $@ $(LDFLAGS) $(LUAC_O) $(LUA_A) $(LIBS)
+
+$(TESTP_T): $(TESTP_O) $(LUA_A)
+	$(CC) -o $@ $(LDFLAGS) $(TESTP_O) $(LUA_A) $(LIBS)
+
+$(TESTUP_T): $(TESTUP_O) $(LUA_A)
+	$(CC) -o $@ $(LDFLAGS) $(TESTUP_O) $(LUA_A) $(LIBS)
+
+$(TESTP_O): lua.h lualib.h lauxlib.h
+	$(CC) -c -o $@ ../test/persist.c -I../src
+
+$(TESTUP_O): ../test/unpersist.c lua.h lualib.h lauxlib.h
+	 $(CC) -c -o $@ ../test/unpersist.c -I../src
 
 clean:
 	$(RM) $(ALL_T) $(ALL_O)
@@ -112,6 +130,8 @@ mingw:
 	"AR=$(CC) -shared -o" "RANLIB=strip --strip-unneeded" \
 	"SYSCFLAGS=-DLUA_BUILD_AS_DLL" "SYSLIBS=" "SYSLDFLAGS=-s" lua.exe
 	$(MAKE) "LUAC_T=luac.exe" luac.exe
+	$(MAKE) "TESTP_T=../test/persist.exe" ../test/persist.exe
+	$(MAKE) "TESTUP_T=../test/unpersist.exe" ../test/unpersist.exe
 
 posix:
 	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_POSIX"

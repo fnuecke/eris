@@ -504,6 +504,6 @@ buf = eris.persist(perms, rootobj)
 -------------------------------------------------------------------------------
 -- Write to file.
 
-outfile = io.open("test.eris", "wb")
+outfile = io.open(..., "wb")
 outfile:write(buf)
 outfile:close()

@@ -155,7 +155,7 @@ You will notice that I decided to bundle this with Lua 5.2.2 directly, instead o
 Testing
 =======
 
-Eris uses the same test suite Pluto uses, extended with a couple of Lua 5.2 specific tests, such as persisting yielded `pcall`s. For now there is no way to automatically build these (sorry).
+Eris uses the same test suite Pluto uses, extended with a couple of Lua 5.2 specific tests, such as persisting yielded `pcall`s. The executables are built automatically into the test folder when building normally and can be run using `make test`. I only tested this on Windows (MinGW 32 and 64 bit) and Linux (Mint 64 bit). If this causes issues on other platforms please submit a patch, thanks.
 
 Differences to Pluto
 ====================
