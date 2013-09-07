@@ -17,8 +17,13 @@ struct PersistedData {
 
 struct Header {
     char header[4] = "ERIS";   /* Header signature for rudimentary validation */
-    uint8_t numbersize;     /* sizeof(lua_Number) to check type compatibility */
+    uint8_t sizeof_number;  /* sizeof(lua_Number) to check type compatibility */
     lua_Number test;    /* -1.234567890 to check representation compatibility */
+    uint8_t sizeof_int; /* sizeof(int) in persisted data */
+    uint8_t sizeof_size_t;  /* sizeof(size_t) in persisted data */
+    /* Note that the last two fields determine the size of the int and size_t
+     * fields in the following definitions. We write each value in the native
+     * "size" and check for truncation when reading, if necessary. */
 };
 
 struct Object {
@@ -44,7 +49,7 @@ struct Reference {
 struct RealObject {
     one_of {
         uint8_t b;      /* If type == LUA_TBOOLEAN */
-        uint32_t l;     /* If type == LUA_TLIGHTUSERDATA */
+        size_t l;       /* If type == LUA_TLIGHTUSERDATA */
         Number n;       /* If type == LUA_TNUMBER */
         String s;       /* If type == LUA_TSTRING */
         Table t;        /* If type == LUA_TTABLE */
@@ -72,7 +77,7 @@ struct Number {
 };
 
 struct String {
-    uint32_t length;    /* The length of the string */
+    size_t length;      /* The length of the string */
     char str[length];   /* The actual string (not always null terminated) */
 };
 
@@ -104,7 +109,7 @@ struct Userdata {
 };
 
 struct LiteralUserdata {
-    uint32_t length;    /* Size of the data */
+    size_t length;      /* Size of the data */
     char data[length];  /* The actual data */
     Object metatable;   /* The metatable (nil for none, otherwise LUA_TTABLE) */
 };

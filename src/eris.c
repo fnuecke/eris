@@ -210,6 +210,8 @@ typedef struct UnpersistInfo {
   lua_State *L;
   int refcount;
   ZIO zio;
+  size_t sizeof_int;
+  size_t sizeof_size_t;
 } UnpersistInfo;
 
 /* Used for serialization to pick the actual reader function. */
@@ -419,60 +421,86 @@ write_int32_t(PersistInfo *pi, int32_t value) {
 }
 
 static void
+write_int64_t(PersistInfo *pi, int64_t value) {
+  write_uint64_t(pi, (uint64_t)value);
+}
+
+static void
+write_float32(PersistInfo *pi, float value) {
+  uint32_t rep;
+  memcpy(&rep, &value, sizeof(float));
+  write_uint32_t(pi, rep);
+}
+
+static void
+write_float64(PersistInfo *pi, double value) {
+  uint64_t rep;
+  memcpy(&rep, &value, sizeof(double));
+  write_uint64_t(pi, rep);
+}
+
+/* Note regarding the following: any decent compiler should be able
+ * to reduce these to just the write call, since sizeof is constant. */
+
+static void
 write_int(PersistInfo *pi, int value) {
-  if (sizeof(int) == sizeof(int32_t)) {
-    write_int32_t(pi, (int32_t)value);
+  if (sizeof(int) == sizeof(int16_t)) {
+    write_int16_t(pi, value);
+  }
+  else if (sizeof(int) == sizeof(int32_t)) {
+    write_int32_t(pi, value);
+  }
+  else if (sizeof(int) == sizeof(int64_t)) {
+    write_int64_t(pi, value);
   }
   else {
-    int32_t pvalue = (int32_t)value;
-    if ((int)pvalue != value) {
-      eris_error(pi->L, "value too large, would get truncated");
-    }
-    write_int32_t(pi, pvalue);
+    eris_error(pi->L, "unsupported int type");
   }
 }
 
 static void
 write_size_t(PersistInfo *pi, size_t value) {
-  if (sizeof(size_t) == sizeof(uint32_t)) {
-    write_uint32_t(pi, (uint32_t)value);
+  if (sizeof(size_t) == sizeof(uint16_t)) {
+    write_uint16_t(pi, value);
+  }
+  else if (sizeof(size_t) == sizeof(uint32_t)) {
+    write_uint32_t(pi, value);
+  }
+  else if (sizeof(size_t) == sizeof(uint64_t)) {
+    write_uint64_t(pi, value);
   }
   else {
-    uint32_t pvalue = (uint32_t)value;
-    if ((size_t)pvalue != value) {
-      eris_error(pi->L, "value too large, would get truncated");
-    }
-    write_uint32_t(pi, pvalue);
-  }
-}
-
-static void
-write_Instruction(PersistInfo *pi, Instruction value) {
-  if (sizeof(Instruction) == sizeof(uint32_t)) {
-    write_uint32_t(pi, (uint32_t)value);
-  }
-  else {
-    uint32_t pvalue = (uint32_t)value;
-    /* Lua only uses 32 bits for its instructions. */
-    eris_assert((Instruction)pvalue == value);
-    write_uint32_t(pi, pvalue);
+    eris_error(pi->L, "unsupported size_t type");
   }
 }
 
 static void
 write_lua_Number(PersistInfo *pi, lua_Number value) {
   if (sizeof(lua_Number) == sizeof(uint32_t)) {
-    uint32_t rep;
-    memcpy(&rep, &value, sizeof(lua_Number));
-    write_uint32_t(pi, rep);
+    write_float32(pi, value);
   }
   else if (sizeof(lua_Number) == sizeof(uint64_t)) {
-    uint64_t rep;
-    memcpy(&rep, &value, sizeof(lua_Number));
-    write_uint64_t(pi, rep);
+    write_float64(pi, value);
   }
   else {
-    assert(!"Unsupported floating point type for lua_Number.");
+    eris_error(pi->L, "unsupported lua_Number type");
+  }
+}
+
+/* Note that Lua only ever uses 32 bits of the Instruction type, so we can
+ * assert that there will be no truncation, even if the underlying type has
+ * more bits (might be the case on some 64 bit systems). */
+
+static void
+write_Instruction(PersistInfo *pi, Instruction value) {
+  if (sizeof(Instruction) == sizeof(uint32_t)) {
+    write_uint32_t(pi, value);
+  }
+  else {
+    uint32_t pvalue = (uint32_t)value;
+    /* Lua only uses 32 bits for its instructions. */
+    eris_assert((Instruction)pvalue == value);
+    write_uint32_t(pi, pvalue);
   }
 }
 
@@ -521,56 +549,112 @@ read_int32_t(UnpersistInfo *upi) {
   return (int32_t)read_uint32_t(upi);
 }
 
+static int64_t
+read_int64_t(UnpersistInfo *upi) {
+  return (int64_t)read_uint64_t(upi);
+}
+
+static float
+read_float32(UnpersistInfo *upi) {
+  float value;
+  uint32_t rep = read_uint32_t(upi);
+  memcpy(&value, &rep, sizeof(float));
+  return value;
+}
+
+static double
+read_float64(UnpersistInfo *upi) {
+  double value;
+  uint64_t rep = read_uint64_t(upi);
+  memcpy(&value, &rep, sizeof(double));
+  return value;
+}
+
+/* Note regarding the following: unlike with writing the sizeof check will be
+ * impossible to optimize away, since it depends on the input; however, the
+ * truncation check may be optimized away in the case where the read data size
+ * equals the native one, so reading data written on the same machine should be
+ * reasonably quick. Doing a (rather rudimentary) benchmark this did not have
+ * any measurable impact on performance. */
+
 static int
 read_int(UnpersistInfo *upi) {
-  if (sizeof(int) == sizeof(int32_t)) {
-    return (int)read_int32_t(upi);
+  int value;
+  if (upi->sizeof_int == sizeof(int16_t)) {
+    int16_t pvalue = read_int16_t(upi);
+    value = (int)pvalue;
+    if ((int32_t)value != pvalue) {
+      eris_error(upi->L, "int value would get truncated");
+    }
+  }
+  else if (upi->sizeof_int == sizeof(int32_t)) {
+    int32_t pvalue = read_int32_t(upi);
+    value = (int)pvalue;
+    if ((int32_t)value != pvalue) {
+      eris_error(upi->L, "int value would get truncated");
+    }
+  }
+  else if (upi->sizeof_int == sizeof(int64_t)) {
+    int64_t pvalue = read_int64_t(upi);
+    value = (int)pvalue;
+    if ((int64_t)value != pvalue) {
+      eris_error(upi->L, "int value would get truncated");
+    }
   }
   else {
-    int32_t pvalue = read_int32_t(upi);
-    int value = (int)pvalue;
-    if ((int32_t)value != pvalue) {
-      eris_error(upi->L, "value too large, would get truncated");
-    }
-    return value;
+    eris_error(upi->L, "unsupported int type");
   }
+  return value;
 }
 
 static size_t
 read_size_t(UnpersistInfo *upi) {
-  if (sizeof(size_t) == sizeof(uint32_t)) {
-    return (size_t)read_uint32_t(upi);
+  size_t value;
+  if (upi->sizeof_size_t == sizeof(uint16_t)) {
+    uint16_t pvalue = read_uint16_t(upi);
+    value = (size_t)pvalue;
+    if ((uint32_t)value != pvalue) {
+      eris_error(upi->L, "size_t value would get truncated");
+    }
+  }
+  else if (upi->sizeof_size_t == sizeof(uint32_t)) {
+    uint32_t pvalue = read_uint32_t(upi);
+    value = (size_t)pvalue;
+    if ((uint32_t)value != pvalue) {
+      eris_error(upi->L, "size_t value would get truncated");
+    }
+  }
+  else if (upi->sizeof_size_t == sizeof(uint64_t)) {
+    uint64_t pvalue = read_uint64_t(upi);
+    value = (size_t)pvalue;
+    if ((uint64_t)value != pvalue) {
+      eris_error(upi->L, "size_t value would get truncated");
+    }
   }
   else {
-    uint32_t pvalue = read_uint32_t(upi);
-    size_t value = (size_t)pvalue;
-    if ((uint32_t)value != pvalue) {
-      eris_error(upi->L, "value too large, would get truncated");
-    }
-    return value;
+    eris_error(upi->L, "unsupported size_t type");
+    value = 0;
+  }
+  return value;
+}
+
+static lua_Number
+read_lua_Number(UnpersistInfo *upi) {
+  if (sizeof(lua_Number) == sizeof(uint32_t)) {
+    return read_float32(upi);
+  }
+  else if (sizeof(lua_Number) == sizeof(uint64_t)) {
+    return read_float64(upi);
+  }
+  else {
+    eris_error(upi->L, "unsupported lua_Number type");
+    return 0; /* not reached */
   }
 }
 
 static Instruction
 read_Instruction(UnpersistInfo *upi) {
   return (Instruction)read_uint32_t(upi);
-}
-
-static lua_Number
-read_lua_Number(UnpersistInfo *upi) {
-  lua_Number value;
-  if (sizeof(lua_Number) == sizeof(uint32_t)) {
-    uint32_t rep = read_uint32_t(upi);
-    memcpy(&value, &rep, sizeof(lua_Number));
-  }
-  else if (sizeof(lua_Number) == sizeof(uint64_t)) {
-    uint64_t rep = read_uint64_t(upi);
-    memcpy(&value, &rep, sizeof(lua_Number));
-  }
-  else {
-    assert(!"Unsupported floating point type for lua_Number.");
-  }
-  return value;
 }
 
 /** ======================================================================== */
@@ -2045,6 +2129,8 @@ p_header(PersistInfo *pi) {
   WRITE_RAW(kHeader, 4);
   write_uint8_t(pi, sizeof(lua_Number));
   write_lua_Number(pi, -1.234567890);
+  write_uint8_t(pi, sizeof(int));
+  write_uint8_t(pi, sizeof(size_t));
 }
 
 static void
@@ -2060,6 +2146,8 @@ u_header(UnpersistInfo *upi) {
   if (fabs(read_lua_Number(upi) + 1.234567890) > 10e-6) {
     luaL_error(upi->L, "Incompatible floating point representation.");
   }
+  upi->sizeof_int = read_uint8_t(upi);
+  upi->sizeof_size_t = read_uint8_t(upi);
 }
 
 static void
