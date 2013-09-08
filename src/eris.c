@@ -351,7 +351,7 @@ path(Info *info) {                               /* perms reftbl var path ... */
   return lua_tostring(info->L, -1);
 }
 
-/* Generates an error message with the appended path. */
+/* Generates an error message with the appended path, if available. */
 static int
 eris_error(Info *info, const char *fmt, ...) {                         /* ... */
     va_list argp;
@@ -375,6 +375,7 @@ eris_error(Info *info, const char *fmt, ...) {                         /* ... */
 
 /** ======================================================================== */
 
+/* Tries to get a setting from the registry. */
 static bool
 get_setting(lua_State *L, void *key) {                                 /* ... */
   eris_checkstack(L, 1);
@@ -387,6 +388,7 @@ get_setting(lua_State *L, void *key) {                                 /* ... */
   return true;
 }
 
+/* Stores a setting in the registry (or removes it if the value is nil). */
 static void
 set_setting(lua_State *L, void *key) {                           /* ... value */
   eris_checkstack(L, 2);
@@ -395,6 +397,7 @@ set_setting(lua_State *L, void *key) {                           /* ... value */
   lua_settable(L, LUA_REGISTRYINDEX);                                  /* ... */
 }
 
+/* Used as a callback for luaL_opt to check boolean setting values. */
 static void
 checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
   if (!lua_isboolean(L, narg)) {                                /* ... :( ... */
@@ -412,8 +415,7 @@ checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
 */
 
 /* I have macros and I'm not afraid to use them! These are highly situational
- * and assume a PersistInfo* named 'pi' is available for the writing ones, and
- * a UnpersistInfo* named 'upi' is available for the reading ones. */
+ * and assume an Info* named 'info' is available. */
 
 /* Writes a raw memory block with the specified size. */
 #define WRITE_RAW(value, size) {\
