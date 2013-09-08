@@ -61,7 +61,7 @@ Finally, you can change some of Eris' behavior via settings that can be queried 
   - `spio`, a boolean value indicating whether to pass IO objects along as light userdata to special persistence functions. When enabled, this will pass the `lua_Writer` and its associated `void*` in addition to the original object when persisting, and the `ZIO*` when unpersisting. The default is `false`.
   - `spkey`, a string that is the name of the field in the metatable of tables and userdata used to control persistence (see Special Persistence). The default is `__persist`.
 
-* `void eris_set_setting(lua_State *L, const char *name, int value);` `[-0, +0, e]`
+* `void eris_set_setting(lua_State *L, const char *name, int value);` `[-0, +0, e]`  
   This will change the value of the setting with the specified name to the value at the specified stack index `value`. The names are the same as described in `eris_get_setting()`. If the specified is invalid, an error will be thrown. If the value at the specified index has the wrong type for the specified setting, an error will be thrown. Specify a `nil` value to reset the setting to its default value.
 
 Note that all settings are stored in the registry of the provided Lua state, so they will be shared across all coroutines.
