@@ -55,14 +55,16 @@ Finally, you can change some of Eris' behavior via settings that can be queried 
 
 * `void eris_get_setting(lua_State *L, const char *name);` `[-0, +1, e]`  
   This will push the current value of the setting with the specified name onto the stack. If there is no setting with the specified name an error will be thrown. Available settings are:
-  - `debug`, a boolean value indicating whether to persist debug information of function prototypes, such as line numbers and variable names.
-  - `maxrec`, an unsigned integer value indicating the maximum complexity of objects: the number of "persist" recursions, for example for nested tables. If an object has a higher complexity we throw an error. This can be used to avoid segfaults due to deep recursion when handling user-provided data.
-  - `path`, a boolean value indicating whether to generate the "path" in the object to display it when an error occurs. **Important:** this adds significant overhead and should only be used to debug errors.
-  - `spio`, a boolean value indicating whether to pass IO objects along as light userdata to special persistence functions. When enabled, this will pass the `lua_Writer` and its associated `void*` in addition to the original object when persisting, and the `ZIO*` when unpersisting.
-  - `spkey`, a string that is the name of the field in the metatable of tables and userdata used to control persistence (see Special Persistence).
+  - `debug`, a boolean value indicating whether to persist debug information of function prototypes, such as line numbers and variable names. The default is `true`.
+  - `maxrec`, an unsigned integer value indicating the maximum complexity of objects: the number of "persist" recursions, for example for nested tables. If an object has a higher complexity we throw an error. This can be used to avoid segfaults due to deep recursion when handling user-provided data. The default is `10000`.
+  - `path`, a boolean value indicating whether to generate the "path" in the object to display it when an error occurs. **Important:** this adds significant overhead and should only be used to debug errors. The default is `false`.
+  - `spio`, a boolean value indicating whether to pass IO objects along as light userdata to special persistence functions. When enabled, this will pass the `lua_Writer` and its associated `void*` in addition to the original object when persisting, and the `ZIO*` when unpersisting. The default is `false`.
+  - `spkey`, a string that is the name of the field in the metatable of tables and userdata used to control persistence (see Special Persistence). The default is `__persist`.
 
 * `void eris_set_setting(lua_State *L, const char *name, int value);` `[-0, +0, e]`
   This will change the value of the setting with the specified name to the value at the specified stack index `value`. The names are the same as described in `eris_get_setting()`. If the specified is invalid, an error will be thrown. If the value at the specified index has the wrong type for the specified setting, an error will be thrown. Specify a `nil` value to reset the setting to its default value.
+
+Note that all settings are stored in the registry of the provided Lua state, so they will be shared across all coroutines.
 
 Lua
 ---
