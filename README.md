@@ -51,6 +51,18 @@ In addition to these, Eris also offers two more convenient functions, if you sim
 
 The subtle name change from Pluto was done because Lua's own dump/undump works with a writer/reader, so it felt more consistent this way.
 
+Finally, you can change some of Eris' behavior via settings that can be queried and adjusted via the following functions:
+
+* `void eris_get_setting(lua_State *L, const char *name);` `[-0, +1, e]`  
+  This will push the current value of the setting with the specified name onto the stack. If there is no setting with the specified name an error will be thrown. Available settings are:
+  - `spkey`, a string that is the name of the field in the metatable of tables and userdata used to control persistence (see Special Persistence).
+  - `spio`, a boolean value indicating whether to pass IO objects along as light userdata to special persistence functions. When enabled, this will pass the `lua_Writer` and its associated `void*` in addition to the original object when persisting, and the `ZIO*` when unpersisting.
+  - `debug`, a boolean value indicating whether to persist debug information of function prototypes, such as line numbers and variable names.
+  - `path`, a boolean value indicating whether to generate the "path" in the object to display it when an error occurs. **Important:** this adds significant overhead and should only be used to debug errors.
+
+* `void eris_set_setting(lua_State *L, const char *name, int value);` `[-0, +0, e]`
+  This will change the value of the setting with the specified name to the value at the specified stack index `value`. The names are the same as described in `eris_get_setting()`. If the specified is invalid, an error will be thrown. If the value at the specified index has the wrong type for the specified setting, an error will be thrown. Specify a `nil` value to reset the setting to its default value.
+
 Lua
 ---
 
@@ -61,6 +73,9 @@ You can either load Eris as a table onto the Lua stack via `luaopen_eris()` or j
 
 * `any eris.unpersist([perms,] value)`  
   This unpersists the provided binary string that resulted from an earlier call to `eris.persist()` and return the unpersisted value. Note that passing the permanent object table is optional. If only one argument is given Eris assumes it's the data representing a persisted object, and the permanent object table is empty. If given, `perms` must be a table. `value` must be a string.
+
+* `[value] eris.settings(name[, value])`  
+  This allows changing Eris' settings for the Lua VM the script runs in (Eris stores its settings in the registry). For available settings see the documentation of the corresponding C functions above.
 
 Concepts
 ========
@@ -164,7 +179,7 @@ Quite obviously most design choices were taken from Pluto, partially to make it 
 
 * The resulting persisted data, while using the same basic idea, is structured slightly differently.
 * On the C side, Eris provides two new functions, `eris_persist` and `eris_unpersist` which work on with the stack, so you don't have to write your own `lua_Writer`/`lua_Reader` implementation.
-* Better error reporting. When debugging, I recommend enabling `generatePath` (directly in the code until I decide how to best pass these options along). This will result in all error messages containing a "path" that specifies where in the object the error occurred. For example:
+* Better error reporting. When debugging, I recommend enabling path generation, e.g. from Lua via `eris.settings("path", true)`. This will result in all error messages containing a "path" that specifies where in the object the error occurred. For example:
 
   ```lua
   > eris.persist({

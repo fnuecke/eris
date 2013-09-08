@@ -85,6 +85,40 @@ LUA_API void eris_persist(lua_State* L, int perms, int value);
  */
 LUA_API void eris_unpersist(lua_State* L, int perms, int value);
 
+/**
+ * Pushes the current value of a setting onto the stack.
+ *
+ * The name is the name of the setting to get the value for:
+ * - 'spkey' the name of the field in the metatable of tables and userdata
+ *           used to control persistence (on/off or special persistence).
+ * - 'spio'  whether to pass IO objects along as light userdata to special
+ *           persistence functions. When persisting this will pass along the
+ *           lua_Writer and its void* in addition to the original object, when
+ *           unpersisting it will pass along a ZIO*.
+ * - 'debug' whether to write debug information when persisting function
+ *           prototypes (line numbers, local variable names, upvalue names).
+ * - 'path'  whether to generate a "path" used to indicate where in an object
+ *           an error occurred. This adds considerable overhead and should
+ *           only be used to debug errors as they appear.
+ *
+ * If an unknown name is specified this will throw an error.
+ *
+ * [-0, +1, e]
+ */
+LUA_API void eris_get_setting(lua_State *L, const char *name);
+
+/**
+ * Changes the value of a setting to a value on the stack.
+ *
+ * For the available settings see eris_set_setting(). This will get the new
+ * value from the specified stack index 'value'. If the type does not match
+ * this will throw an error. Specify a nil value to reset the setting to its
+ * default value.
+ *
+ * [-0, +0, e]
+ */
+LUA_API void eris_set_setting(lua_State *L, const char *name, int value);
+
 /*
 ** ==================================================================
 ** Library installer
