@@ -203,6 +203,9 @@ typedef struct PersistInfo {
   int refcount;
   lua_Writer writer;
   void *ud;
+  const char *metafield;
+  bool writeDebugInfo;
+  bool passWriterToSpecialPersist;
 } PersistInfo;
 
 /* State information when unpersisting an object. */
@@ -212,11 +215,8 @@ typedef struct UnpersistInfo {
   ZIO zio;
   size_t sizeof_int;
   size_t sizeof_size_t;
+  bool passReaderToSpecialPersist;
 } UnpersistInfo;
-
-/* Used for serialization to pick the actual reader function. */
-typedef unsigned short ushort;
-typedef void* voidp;
 
 /* Type names, used for error messages. */
 static const char *const kTypenames[] = {
@@ -603,6 +603,7 @@ read_int(UnpersistInfo *upi) {
   }
   else {
     eris_error(upi->L, "unsupported int type");
+    value = 0; /* not reached */
   }
   return value;
 }
@@ -633,7 +634,7 @@ read_size_t(UnpersistInfo *upi) {
   }
   else {
     eris_error(upi->L, "unsupported size_t type");
-    value = 0;
+    value = 0; /* not reached */
   }
   return value;
 }
@@ -893,7 +894,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 
   /* Check whether we should persist literally, or via the metafunction. */
   if (lua_getmetatable(pi->L, -1)) {                            /* ... obj mt */
-    lua_pushstring(pi->L, kPersistKey);                    /* ... obj mt pkey */
+    lua_pushstring(pi->L, pi->metafield);                  /* ... obj mt pkey */
     lua_rawget(pi->L, -2);                             /* ... obj mt persist? */
     switch (lua_type(pi->L, -1)) {
       /* No entry, act according to default. */
@@ -912,7 +913,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
         lua_replace(pi->L, -2);                               /* ... obj func */
         lua_pushvalue(pi->L, -2);                         /* ... obj func obj */
 
-        if (kPassIOToPersist) {
+        if (pi->passWriterToSpecialPersist) {
           lua_pushlightuserdata(pi->L, pi->writer);/* ... obj func obj writer */
           lua_pushlightuserdata(pi->L, pi->ud); /* ... obj func obj writer ud */
           lua_call(pi->L, 3, 1);                             /* ... obj func? */
@@ -921,7 +922,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
           lua_call(pi->L, 1, 1);                             /* ... obj func? */
         }
         if (!lua_isfunction(pi->L, -1)) {                       /* ... obj :( */
-          eris_error(pi->L, "%s did not return a function", kPersistKey);
+          eris_error(pi->L, "%s did not return a function", pi->metafield);
         }                                                     /* ... obj func */
 
         /* Special persistence, call this function when unpersisting. */
@@ -930,7 +931,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
         lua_pop(pi->L, 1);                                         /* ... obj */
         return;
       default:                                               /* ... obj mt :( */
-        eris_error(pi->L, "%d not nil, boolean, or function", kPersistKey);
+        eris_error(pi->L, "%d not nil, boolean, or function", pi->metafield);
         return; /* not reached */
     }
   }
@@ -950,7 +951,7 @@ p_special(PersistInfo *pi, PersistCallback literal) {              /* ... obj */
 
 static void
 u_special(UnpersistInfo *upi, int type, UnpersistCallback literal) {   /* ... */
-  eris_checkstack(upi->L, kPassIOToPersist ? 2 : 1);
+  eris_checkstack(upi->L, upi->passReaderToSpecialPersist ? 2 : 1);
   if (READ_VALUE(uint8_t)) {
     int reference;
     /* Reserve entry in the reftable before unpersisting the function to keep
@@ -966,7 +967,7 @@ u_special(UnpersistInfo *upi, int type, UnpersistCallback literal) {   /* ... */
       eris_error(upi->L, "invalid restore function");
     }                                                           /* ... spfunc */
 
-    if (kPassIOToPersist) {
+    if (upi->passReaderToSpecialPersist) {
       lua_pushlightuserdata(upi->L, &upi->zio);             /* ... spfunc zio */
       lua_call(upi->L, 1, 1);                                     /* ... obj? */
     } else {
@@ -1078,8 +1079,8 @@ p_proto(PersistInfo *pi) {                                       /* ... proto */
   }
 
   /* If we don't have to persist debug information skip the rest. */
-  WRITE_VALUE(kWriteDebugInformation, uint8_t);
-  if (!kWriteDebugInformation) {
+  WRITE_VALUE(pi->writeDebugInfo, uint8_t);
+  if (!pi->writeDebugInfo) {
     return;
   }
 
@@ -2158,6 +2159,9 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
   pi.refcount = 0;
   pi.writer = writer;
   pi.ud = ud;
+  pi.metafield = kPersistKey;
+  pi.writeDebugInfo = kWriteDebugInformation;
+  pi.passWriterToSpecialPersist = kPassIOToPersist;
 
   eris_checkstack(L, 2);
 
@@ -2189,6 +2193,7 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
   upi.L = L;
   upi.refcount = 0;
   eris_init(L, &upi.zio, reader, ud);
+  upi.passReaderToSpecialPersist = kPassIOToPersist;
 
   eris_checkstack(L, 3);
 
