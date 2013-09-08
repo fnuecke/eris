@@ -83,6 +83,11 @@ static const bool kWriteDebugInformation = true;
  * processing and memory overhead this introduces. */
 static const bool kGeneratePath = false;
 
+/* The maximum object complexity. This is the number of allowed recursions when
+ * persisting or unpersisting an object, for example for nested tables. This is
+ * used to avoid segfaults when writing or reading user data. */
+static const lua_Unsigned kMaxComplexity = 10000;
+
 /*
 ** ============================================================================
 ** Lua internals interfacing.
@@ -218,7 +223,9 @@ typedef struct UnpersistInfo {
 /* Info shared in persist and unpersist. */
 typedef struct Info {
   lua_State *L;
-  int refcount;
+  lua_Unsigned level;
+  int refcount; /* int because rawseti/rawgeti takes an int. */
+  lua_Unsigned maxComplexity;
   bool generatePath;
   bool passIOToPersist;
   /* Which one it really is will always be clear from the context. */
@@ -241,6 +248,7 @@ static const char *const kSettingMetafield = "spkey";
 static const char *const kSettingPassIOToPersist = "spio";
 static const char *const kSettingGeneratePath = "path";
 static const char *const kSettingWriteDebugInfo = "debug";
+static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
 static const char *const kHeader = "ERIS";
@@ -1906,6 +1914,11 @@ u_thread(Info *info) {                                                 /* ... */
 static void
 persist_typed(Info *info, int type) {                 /* perms reftbl ... obj */
   eris_ifassert(const int top = lua_gettop(info->L));
+  if (info->level >= info->maxComplexity) {
+    eris_error(info, "object too complex");
+  }
+  ++info->level;
+
   WRITE_VALUE(type, int);
   switch(type) {
     case LUA_TBOOLEAN:
@@ -1941,6 +1954,8 @@ persist_typed(Info *info, int type) {                 /* perms reftbl ... obj */
     default:
       eris_error(info, "trying to persist unknown type");
   }                                                   /* perms reftbl ... obj */
+
+  --info->level;
   eris_assert(top == lua_gettop(info->L));
 }
 
@@ -2050,63 +2065,68 @@ u_permanent(Info *info) {                                 /* perms reftbl ... */
 
 static void
 unpersist(Info *info) {                                   /* perms reftbl ... */
-  const int typeOrReference = READ_VALUE(int);
-
   eris_ifassert(const int top = lua_gettop(info->L));
+  if (info->level >= info->maxComplexity) {
+    eris_error(info, "object too complex");
+  }
+  ++info->level;
 
   eris_checkstack(info->L, 1);
-
-  if (typeOrReference > ERIS_REFERENCE_OFFSET) {
-    const int reference = typeOrReference - ERIS_REFERENCE_OFFSET;
-    lua_rawgeti(info->L, REFTIDX, reference);     /* perms reftbl ud ... obj? */
-    if (lua_isnil(info->L, -1)) {                   /* perms reftbl ud ... :( */
-      eris_error(info, "invalid reference #%d", reference);
-    }                                              /* perms reftbl ud ... obj */
+  {
+    const int typeOrReference = READ_VALUE(int);
+    if (typeOrReference > ERIS_REFERENCE_OFFSET) {
+      const int reference = typeOrReference - ERIS_REFERENCE_OFFSET;
+      lua_rawgeti(info->L, REFTIDX, reference);   /* perms reftbl ud ... obj? */
+      if (lua_isnil(info->L, -1)) {                 /* perms reftbl ud ... :( */
+        eris_error(info, "invalid reference #%d", reference);
+      }                                            /* perms reftbl ud ... obj */
+    }
+    else {
+      const int type = typeOrReference;
+      switch (type) {
+        case LUA_TNIL:
+          lua_pushnil(info->L);
+          break;
+        case LUA_TBOOLEAN:
+          u_boolean(info);
+          break;
+        case LUA_TLIGHTUSERDATA:
+          u_pointer(info);
+          break;
+        case LUA_TNUMBER:
+          u_number(info);
+          break;
+        case LUA_TSTRING:
+          u_string(info);
+          break;
+        case LUA_TTABLE:
+          u_table(info);
+          break;
+        case LUA_TFUNCTION:
+          u_closure(info);
+          break;
+        case LUA_TUSERDATA:
+          u_userdata(info);
+          break;
+        case LUA_TTHREAD:
+          u_thread(info);
+          break;
+        case LUA_TPROTO:
+          u_proto(info);
+          break;
+        case LUA_TUPVAL:
+          u_upval(info);
+          break;
+        case ERIS_PERMANENT:
+          u_permanent(info);
+          break;
+        default:
+          eris_error(info, "trying to unpersist unknown type %d", type);
+      }                                              /* perms reftbl ... obj? */
+    }
   }
-  else {
-    const int type = typeOrReference;
-    switch (type) {
-      case LUA_TNIL:
-        lua_pushnil(info->L);
-        break;
-      case LUA_TBOOLEAN:
-        u_boolean(info);
-        break;
-      case LUA_TLIGHTUSERDATA:
-        u_pointer(info);
-        break;
-      case LUA_TNUMBER:
-        u_number(info);
-        break;
-      case LUA_TSTRING:
-        u_string(info);
-        break;
-      case LUA_TTABLE:
-        u_table(info);
-        break;
-      case LUA_TFUNCTION:
-        u_closure(info);
-        break;
-      case LUA_TUSERDATA:
-        u_userdata(info);
-        break;
-      case LUA_TTHREAD:
-        u_thread(info);
-        break;
-      case LUA_TPROTO:
-        u_proto(info);
-        break;
-      case LUA_TUPVAL:
-        u_upval(info);
-        break;
-      case ERIS_PERMANENT:
-        u_permanent(info);
-        break;
-      default:
-        eris_error(info, "trying to unpersist unknown type %d", type);
-    }                                                /* perms reftbl ... obj? */
-  }
 
+  --info->level;
   eris_assert(top + 1 == lua_gettop(info->L));
 }
 
@@ -2214,7 +2234,9 @@ static void
 unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
   Info info;                                            /* perms buff rootobj */
   info.L = L;
+  info.level = 0;
   info.refcount = 0;
+  info.maxComplexity = kMaxComplexity;
   info.passIOToPersist = kPassIOToPersist;
   info.generatePath = kGeneratePath;
   info.u.pi.writer = writer;
@@ -2224,6 +2246,11 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
 
   eris_checkstack(L, 3);
 
+  if (get_setting(L, (void*)&kSettingMaxComplexity)) {
+                                                  /* perms buff rootobj value */
+    info.maxComplexity = lua_tounsigned(L, -1);
+    lua_pop(L, 1);                                      /* perms buff rootobj */
+  }
   if (get_setting(L, (void*)&kSettingGeneratePath)) {
                                                   /* perms buff rootobj value */
     info.generatePath = lua_toboolean(L, -1);
@@ -2270,13 +2297,20 @@ static void
 unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
   Info info;
   info.L = L;
+  info.level = 0;
   info.refcount = 0;
+  info.maxComplexity = kMaxComplexity;
   info.generatePath = kGeneratePath;
   info.passIOToPersist = kPassIOToPersist;
   eris_init(L, &info.u.upi.zio, reader, ud);
 
   eris_checkstack(L, 3);
 
+  if (get_setting(L, (void*)&kSettingMaxComplexity)) {
+                                                  /* perms buff rootobj value */
+    info.maxComplexity = lua_tounsigned(L, -1);
+    lua_pop(L, 1);                                      /* perms buff rootobj */
+  }
   if (get_setting(L, (void*)&kSettingGeneratePath)) {
                                                  /* perms buff? rootobj value */
     info.generatePath = lua_toboolean(L, -1);
@@ -2400,6 +2434,11 @@ l_settings(lua_State *L) {                                /* name value? ...? */
         lua_pushboolean(L, kGeneratePath);
       }
     }
+    else if (IS(kSettingMaxComplexity)) {
+      if (!get_setting(L, (void*)&kSettingMaxComplexity)) {
+        lua_pushunsigned(L, kMaxComplexity);
+      }
+    }
     else {
       return luaL_argerror(L, 1, "no such setting");
     }                                                           /* name value */
@@ -2423,6 +2462,10 @@ l_settings(lua_State *L) {                                /* name value? ...? */
     else if (IS(kSettingGeneratePath)) {
       luaL_opt(L, checkboolean, 2, NULL);
       set_setting(L, (void*)&kSettingGeneratePath);
+    }
+    else if (IS(kSettingMaxComplexity)) {
+      luaL_optunsigned(L, 2, 0);
+      set_setting(L, (void*)&kSettingMaxComplexity);
     }
     else {
       return luaL_argerror(L, 1, "no such setting");
