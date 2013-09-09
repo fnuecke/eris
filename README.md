@@ -78,7 +78,7 @@ You can either load Eris as a table onto the Lua stack via `luaopen_eris()` or j
   This unpersists the provided binary string that resulted from an earlier call to `eris.persist()` and return the unpersisted value. Note that passing the permanent object table is optional. If only one argument is given Eris assumes it's the data representing a persisted object, and the permanent object table is empty. If given, `perms` must be a table. `value` must be a string.
 
 * `[value] eris.settings(name[, value])`  
-  This allows changing Eris' settings for the Lua VM the script runs in (Eris stores its settings in the registry). For available settings see the documentation of the corresponding C functions above.
+  This allows changing Eris' settings for the Lua VM the script runs in (Eris stores its settings in the registry). For available settings see the documentation of the corresponding C functions above. If this function is called with only a name it will return the current value of that setting. If it is called with a value also, it will set the setting to that value and return nothing.
 
 Concepts
 ========
