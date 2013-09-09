@@ -89,17 +89,21 @@ LUA_API void eris_unpersist(lua_State* L, int perms, int value);
  * Pushes the current value of a setting onto the stack.
  *
  * The name is the name of the setting to get the value for:
- * - 'spkey' the name of the field in the metatable of tables and userdata
- *           used to control persistence (on/off or special persistence).
- * - 'spio'  whether to pass IO objects along as light userdata to special
- *           persistence functions. When persisting this will pass along the
- *           lua_Writer and its void* in addition to the original object, when
- *           unpersisting it will pass along a ZIO*.
- * - 'debug' whether to write debug information when persisting function
- *           prototypes (line numbers, local variable names, upvalue names).
- * - 'path'  whether to generate a "path" used to indicate where in an object
- *           an error occurred. This adds considerable overhead and should
- *           only be used to debug errors as they appear.
+ * - 'debug'  whether to write debug information when persisting function
+ *            prototypes (line numbers, local variable names, upvalue names).
+ * - 'maxrec' the maximum complexity of objects we support (the nesting level
+ *            of tables, for example). This can be useful to avoid segmentation
+ *            faults due to too deep recursion when working with user-provided
+ *            data.
+ * - 'path'   whether to generate a "path" used to indicate where in an object
+ *            an error occurred. This adds considerable overhead and should
+ *            only be used to debug errors as they appear.
+ * - 'spio'   whether to pass IO objects along as light userdata to special
+ *            persistence functions. When persisting this will pass along the
+ *            lua_Writer and its void* in addition to the original object, when
+ *            unpersisting it will pass along a ZIO*.
+ * - 'spkey'  the name of the field in the metatable of tables and userdata
+ *            used to control persistence (on/off or special persistence).
  *
  * If an unknown name is specified this will throw an error.
  *
