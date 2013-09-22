@@ -115,6 +115,8 @@ static const lua_Unsigned kMaxComplexity = 10000;
 #define eris_newLclosure luaF_newLclosure
 #define eris_newupval luaF_newupval
 #define eris_findupval luaF_findupval
+/* lgc.h */
+#define eris_barrierproto luaC_barrierproto
 /* lmem.h */
 #define eris_reallocvector luaM_reallocvector
 /* lobject.h */
@@ -252,6 +254,9 @@ static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
 static const char *const kHeader = "ERIS";
+
+/* Floating point number used to check compatibility of loaded data. */
+static const lua_Number kHeaderNumber = (lua_Number)-1.234567890;
 
 /* Stack indices of some internal values/tables, to avoid magic numbers. */
 #define PERMIDX 1
@@ -1044,9 +1049,8 @@ u_special(Info *info, int type, Callback literal) {                    /* ... */
     }
 
     if (lua_type(info->L, -1) != type) {                            /* ... :( */
-      eris_error(info,
-                      "bad unpersist function (%s expected, returned %s)",
-                      kTypenames[type], kTypenames[lua_type(info->L, -1)]);
+      eris_error(info, "bad unpersist function (%s expected, returned %s)",
+                       kTypenames[type], kTypenames[lua_type(info->L, -1)]);
     }                                                              /* ... obj */
 
     /* Update the reftable entry. */
@@ -1094,7 +1098,7 @@ u_userdata(Info *info) {                                               /* ... */
 
 /* We track the actual upvalues themselves by pushing their "id" (meaning a
  * pointer to them) as lightuserdata to the reftable. This is safe because
- * lightuserdata will not normally end up in their, because simple value types
+ * lightuserdata will not normally end up in there, because simple value types
  * are always persisted directly (because that'll be just as large, memory-
  * wise as when pointing to the first instance). Same for protos. */
 
@@ -1543,8 +1547,8 @@ u_closure(Info *info) {                                                /* ... */
     }
     poppath(info);
 
-    luaC_barrierproto(info->L, p, cl);
-    p->cache = cl; /* save it on cache for reuse, see lvm.c:416 */
+    eris_barrierproto(info->L, p, cl);
+    p->cache = cl; /* save it in cache for reuse, see lvm.c:416 */
   }
 
   eris_assert(lua_type(info->L, -1) == LUA_TFUNCTION);
@@ -2209,10 +2213,10 @@ reader(lua_State *L, void *ud, size_t *sz) {
 static void
 p_header(Info *info) {
   WRITE_RAW(kHeader, 4);
-  write_uint8_t(info, sizeof(lua_Number));
-  write_lua_Number(info, -1.234567890);
-  write_uint8_t(info, sizeof(int));
-  write_uint8_t(info, sizeof(size_t));
+  WRITE_VALUE(sizeof(lua_Number), uint8_t);
+  WRITE_VALUE(kHeaderNumber, lua_Number);
+  WRITE_VALUE(sizeof(int), uint8_t);
+  WRITE_VALUE(sizeof(size_t), uint8_t);
 }
 
 static void
@@ -2222,14 +2226,15 @@ u_header(Info *info) {
   if (strncmp(kHeader, header, 4)) {
     luaL_error(info->L, "invalid data");
   }
-  if (read_uint8_t(info) != sizeof(lua_Number)) {
+  if (READ_VALUE(uint8_t) != sizeof(lua_Number)) {
     luaL_error(info->L, "incompatible floating point type");
   }
-  if (fabs(read_lua_Number(info) + 1.234567890) > 10e-6) {
+  /* In this case we really do want floating point equality. */
+  if (READ_VALUE(lua_Number) != kHeaderNumber) {
     luaL_error(info->L, "incompatible floating point representation");
   }
-  info->u.upi.sizeof_int = read_uint8_t(info);
-  info->u.upi.sizeof_size_t = read_uint8_t(info);
+  info->u.upi.sizeof_int = READ_VALUE(uint8_t);
+  info->u.upi.sizeof_size_t = READ_VALUE(uint8_t);
 }
 
 static void
@@ -2355,6 +2360,9 @@ static int
 l_persist(lua_State *L) {                             /* perms? rootobj? ...? */
   Mbuffer buff;
 
+  /* See if we have anything at all. */
+  luaL_checkany(L, 1);
+
   /* If we only have one object we assume it is the root object and that there
    * is no perms table, so we create an empty one for internal use. */
   if (lua_gettop(L) == 1) {                                        /* rootobj */
@@ -2387,6 +2395,9 @@ l_persist(lua_State *L) {                             /* perms? rootobj? ...? */
 static int
 l_unpersist(lua_State *L) {                               /* perms? str? ...? */
   RBuffer buff;
+
+  /* See if we have anything at all. */
+  luaL_checkany(L, 1);
 
   /* If we only have one object we assume it is the root object and that there
    * is no perms table, so we create an empty one for internal use. */
