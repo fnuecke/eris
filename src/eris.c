@@ -254,6 +254,7 @@ static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
 static const char *const kHeader = "ERIS";
+static const size_t kHeaderLength = sizeof(kHeader);
 
 /* Floating point number used to check compatibility of loaded data. */
 static const lua_Number kHeaderNumber = (lua_Number)-1.234567890;
@@ -2212,7 +2213,7 @@ reader(lua_State *L, void *ud, size_t *sz) {
 
 static void
 p_header(Info *info) {
-  WRITE_RAW(kHeader, 4);
+  WRITE_RAW(kHeader, kHeaderLength);
   WRITE_VALUE(sizeof(lua_Number), uint8_t);
   WRITE_VALUE(kHeaderNumber, lua_Number);
   WRITE_VALUE(sizeof(int), uint8_t);
@@ -2221,9 +2222,9 @@ p_header(Info *info) {
 
 static void
 u_header(Info *info) {
-  char header[4];
-  READ_RAW(header, 4);
-  if (strncmp(kHeader, header, 4)) {
+  char header[kHeaderLength];
+  READ_RAW(header, kHeaderLength);
+  if (strncmp(kHeader, header, kHeaderLength)) {
     luaL_error(info->L, "invalid data");
   }
   if (READ_VALUE(uint8_t) != sizeof(lua_Number)) {
