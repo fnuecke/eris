@@ -254,7 +254,7 @@ static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
 static const char *const kHeader = "ERIS";
-static const size_t kHeaderLength = sizeof(kHeader);
+#define HEADER_LENGTH sizeof(kHeader)
 
 /* Floating point number used to check compatibility of loaded data. */
 static const lua_Number kHeaderNumber = (lua_Number)-1.234567890;
@@ -2213,7 +2213,7 @@ reader(lua_State *L, void *ud, size_t *sz) {
 
 static void
 p_header(Info *info) {
-  WRITE_RAW(kHeader, kHeaderLength);
+  WRITE_RAW(kHeader, HEADER_LENGTH);
   WRITE_VALUE(sizeof(lua_Number), uint8_t);
   WRITE_VALUE(kHeaderNumber, lua_Number);
   WRITE_VALUE(sizeof(int), uint8_t);
@@ -2222,9 +2222,9 @@ p_header(Info *info) {
 
 static void
 u_header(Info *info) {
-  char header[kHeaderLength];
-  READ_RAW(header, kHeaderLength);
-  if (strncmp(kHeader, header, kHeaderLength)) {
+  char header[HEADER_LENGTH];
+  READ_RAW(header, HEADER_LENGTH);
+  if (strncmp(kHeader, header, HEADER_LENGTH)) {
     luaL_error(info->L, "invalid data");
   }
   if (READ_VALUE(uint8_t) != sizeof(lua_Number)) {
@@ -2466,15 +2466,15 @@ l_settings(lua_State *L) {                                /* name value? ...? */
       set_setting(L, (void*)&kSettingMetafield);
     }
     else if (IS(kSettingPassIOToPersist)) {
-      luaL_opt(L, checkboolean, 2, NULL);
+      luaL_opt(L, checkboolean, 2, false);
       set_setting(L, (void*)&kSettingPassIOToPersist);
     }
     else if (IS(kSettingWriteDebugInfo)) {
-      luaL_opt(L, checkboolean, 2, NULL);
+      luaL_opt(L, checkboolean, 2, false);
       set_setting(L, (void*)&kSettingWriteDebugInfo);
     }
     else if (IS(kSettingGeneratePath)) {
-      luaL_opt(L, checkboolean, 2, NULL);
+      luaL_opt(L, checkboolean, 2, false);
       set_setting(L, (void*)&kSettingGeneratePath);
     }
     else if (IS(kSettingMaxComplexity)) {
