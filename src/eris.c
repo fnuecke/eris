@@ -1510,39 +1510,46 @@ u_closure(Info *info) {                                                /* ... */
       }
       else {                                             /* ... lcl tbl upval */
         eris_assert(lua_type(info->L, -1) == LUA_TLIGHTUSERDATA);
-        *uv = lua_touserdata(info->L, -1);
+        *uv = (UpVal*)lua_touserdata(info->L, -1);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
       }
 
-      /* Always update the value of the upvalue - if we had a cycle, it might
-       * have been incorrectly initialized to nil. */
-      lua_rawgeti(info->L, -1, 1);                         /* ... lcl tbl obj */
-      eris_setobj(info->L, &(*uv)->u.value, info->L->top - 1);
-      lua_pop(info->L, 1);                                     /* ... lcl tbl */
+      /* Set the upvalue's actual value and add our reference to the upvalue to
+       * the list, for pointer patching if we have to open the upvalue in
+       * u_thread. Either is only necessary if the upvalue is still closed. */
+      if ((*uv)->v == &(*uv)->u.value) {
+        /* Always update the value of the upvalue's value for closed upvalues,
+         * even if we re-used one - if we had a cycle, it might have been
+         * incorrectly initialized to nil before. */
+        lua_rawgeti(info->L, -1, 1);                       /* ... lcl tbl obj */
+        eris_setobj(info->L, &(*uv)->u.value, info->L->top - 1);
+        lua_pop(info->L, 1);                                   /* ... lcl tbl */
 
-      /* Add our reference to the upvalue to the list, for pointer patching
-       * if we have to open the upvalue in u_thread. */
-      lua_pushlightuserdata(info->L, uv);               /* ... lcl tbl upvalp */
-      if (luaL_len(info->L, -2) >= 2) {
-        lua_rawseti(info->L, -2, luaL_len(info->L, -2) + 1);   /* ... lcl tbl */
-      }
-      else {
-        int i;
-        /* Find where to insert. This can happen if we have cycles, in which
-         * case the table is not fully initialized at this point, i.e. the
-         * value is not in it, yet (we work around that by always setting it).*/
-        for (i = 3;; ++i) {
-          lua_rawgeti(info->L, -2, i);       /* ... lcl tbl upvalp upvalp/nil */
-          if (lua_isnil(info->L, -1)) {             /* ... lcl tbl upvalp nil */
-            lua_pop(info->L, 1);                        /* ... lcl tbl upvalp */
-            lua_rawseti(info->L, -2, i);                       /* ... lcl tbl */
-            break;
-          }
-          else {
-            lua_pop(info->L, 1);                        /* ... lcl tbl upvalp */
-          }
+        lua_pushlightuserdata(info->L, uv);             /* ... lcl tbl upvalp */
+        if (luaL_len(info->L, -2) >= 2) {
+          /* Got a valid sequence, insert at the end. */
+          lua_rawseti(info->L, -2, luaL_len(info->L, -2) + 1); /* ... lcl tbl */
+        }
+        else {                                          /* ... lcl tbl upvalp */
+          int i;
+          /* Find where to insert. This can happen if we have cycles, in which
+           * case the table is not fully initialized at this point, i.e. the
+           * value is not in it, yet (we work around that by always setting it,
+           * as seen above). */
+          for (i = 3;; ++i) {
+            lua_rawgeti(info->L, -2, i);     /* ... lcl tbl upvalp upvalp/nil */
+            if (lua_isnil(info->L, -1)) {           /* ... lcl tbl upvalp nil */
+              lua_pop(info->L, 1);                      /* ... lcl tbl upvalp */
+              lua_rawseti(info->L, -2, i);                     /* ... lcl tbl */
+              break;
+            }
+            else {
+              lua_pop(info->L, 1);                      /* ... lcl tbl upvalp */
+            }
+          }                                                    /* ... lcl tbl */
         }
       }
+
       lua_pop(info->L, 1);                                         /* ... lcl */
       poppath(info);
     }
