@@ -1210,7 +1210,7 @@ u_proto(Info *info) {                                            /* ... proto */
   p->lastlinedefined = READ_VALUE(int);
   p->numparams = READ_VALUE(uint8_t);
   p->is_vararg = READ_VALUE(uint8_t);
-  p->maxstacksize= READ_VALUE(uint8_t);
+  p->maxstacksize = READ_VALUE(uint8_t);
 
   /* Read byte code. */
   p->sizecode = READ_VALUE(int);
@@ -1220,6 +1220,10 @@ u_proto(Info *info) {                                            /* ... proto */
   /* Read constants. */
   p->sizek = READ_VALUE(int);
   eris_reallocvector(info->L, p->k, 0, p->sizek, TValue);
+  /* Set all values to nil to avoid confusing the GC. */
+  for (i = 0, n = p->sizek; i < n; ++i) {
+    eris_setnilvalue(&p->k[i]);
+  }
   pushpath(info, ".constants");
   for (i = 0, n = p->sizek; i < n; ++i) {
     pushpath(info, "[%d]", i);
@@ -1233,6 +1237,8 @@ u_proto(Info *info) {                                            /* ... proto */
   /* Read child protos. */
   p->sizep = READ_VALUE(int);
   eris_reallocvector(info->L, p->p, 0, p->sizep, Proto*);
+  /* Null all entries to avoid confusing the GC. */
+  memset(p->p, 0, p->sizep * sizeof(Proto*));
   pushpath(info, ".protos");
   for (i = 0, n = p->sizep; i < n; ++i) {
     Proto *cp;
@@ -1277,6 +1283,10 @@ u_proto(Info *info) {                                            /* ... proto */
   /* Read locals info. */
   p->sizelocvars = READ_VALUE(int);
   eris_reallocvector(info->L, p->locvars, 0, p->sizelocvars, LocVar);
+  /* Null the variable names to avoid confusing the GC. */
+  for (i = 0, n = p->sizelocvars; i < n; ++i) {
+    p->locvars[i].varname = NULL;
+  }
   pushpath(info, ".locvars");
   for (i = 0, n = p->sizelocvars; i < n; ++i) {
     pushpath(info, "[%d]", i);
@@ -1718,11 +1728,23 @@ p_thread(Info *info) {                                          /* ... thread */
     (stackpos) = thread->stack; \
     eris_error(info, "stack index out of bounds"); }
 
+/* I had so hoped to get by without any 'hacks', but I surrender. We mark the
+ * thread as incomplete to avoid the GC messing with it while we're building
+ * it. Otherwise it may try to shrink its stack. We do this by setting its
+ * stack field to null for every call that may trigger a GC run, since that
+ * field is what's used to determine whether threads should be shrunk. See
+ * lgc.c:699. Some of the locks could probably be joined (since nothing
+ * inbetween requires the stack field to be valid), but I prefer to keep the
+ * "invalid" blocks as small as possible to make it clearer. Also, locking and
+ * unlocking are really just variable assignments, so they're really cheap. */
+#define LOCK(L) (L->stack = NULL)
+#define UNLOCK(L) (L->stack = stack)
+
 static void
 u_thread(Info *info) {                                                 /* ... */
   lua_State* thread;
   size_t level;
-  StkId o;
+  StkId stack, o;
 
   eris_checkstack(info->L, 3);
 
@@ -1731,20 +1753,29 @@ u_thread(Info *info) {                                                 /* ... */
 
   /* Unpersist the stack. Read size first and adjust accordingly. */
   eris_reallocstack(thread, READ_VALUE(int));
+  stack = thread->stack; /* After the realloc in case the address changes. */
   thread->top = thread->stack + READ_VALUE(size_t);
   validate(thread->top, thread->stack_last);
 
   /* Read the elements one by one. */
+  LOCK(thread);
   pushpath(info, ".stack");
+  UNLOCK(thread);
   level = 0;
-  for (o = thread->stack; o < thread->top; ++o) {
+  for (o = stack; o < thread->top; ++o) {
+    LOCK(thread);
     pushpath(info, "[%d]", level++);
     unpersist(info);                                        /* ... thread obj */
+    UNLOCK(thread);
     eris_setobj(thread, o, info->L->top - 1);
     lua_pop(info->L, 1);                                        /* ... thread */
+    LOCK(thread);
     poppath(info);
+    UNLOCK(thread);
   }
+  LOCK(thread);
   poppath(info);
+  UNLOCK(thread);
 
   /* As in p_thread, just to make sure. */
   eris_assert(thread->nny == 1);
@@ -1776,11 +1807,15 @@ u_thread(Info *info) {                                                 /* ... */
   thread->hookcount = READ_VALUE(int); */
 
   /* Read call information (stack frames). */
+  LOCK(thread);
   pushpath(info, ".callinfo");
+  UNLOCK(thread);
   thread->ci = &thread->base_ci;
   level = 0;
   for (;;) {
+    LOCK(thread);
     pushpath(info, "[%d]", level++);
+    UNLOCK(thread);
     thread->ci->func = eris_restorestackidx(thread, READ_VALUE(size_t));
     validate(thread->ci->func, thread->top - 1);
     thread->ci->top = eris_restorestackidx(thread, READ_VALUE(size_t));
@@ -1822,7 +1857,9 @@ u_thread(Info *info) {                                                 /* ... */
       /* TODO Is this really right? */
       if (thread->ci->callstatus & (CIST_YPCALL | CIST_YIELDED)) {
         thread->ci->u.c.ctx = READ_VALUE(int);
+        LOCK(thread);
         unpersist(info);                                  /* ... thread func? */
+        UNLOCK(thread);
         if (lua_iscfunction(info->L, -1)) {                /* ... thread func */
           thread->ci->u.c.k = lua_tocfunction(info->L, -1);
         }
@@ -1837,7 +1874,9 @@ u_thread(Info *info) {                                                 /* ... */
         thread->ci->u.c.k = NULL;
       }
     }
+    LOCK(thread);
     poppath(info);
+    UNLOCK(thread);
 
     /* Read in value for check for next iteration. */
     if (READ_VALUE(uint8_t)) {
@@ -1856,7 +1895,9 @@ u_thread(Info *info) {                                                 /* ... */
       eris_error(info, "invalid callinfo");
     }
   }
+  LOCK(thread);
   poppath(info);
+  UNLOCK(thread);
 
   /* Get from context: only zero for dead threads, otherwise one. */
   thread->nCcalls = thread->status != LUA_OK || lua_gettop(thread) != 0;
@@ -1866,7 +1907,9 @@ u_thread(Info *info) {                                                 /* ... */
    * stack of the thread). For this reason we store all previous references to
    * the upvalue in a table that is returned when we try to unpersist an
    * upvalue, so that we can adjust these pointers in here. */
+  LOCK(thread);
   pushpath(info, ".openupval");
+  UNLOCK(thread);
   level = 0;
   for (;;) {
     UpVal *nuv;
@@ -1877,14 +1920,20 @@ u_thread(Info *info) {                                                 /* ... */
     if (offset == 0) {
       break;
     }
+    LOCK(thread);
     pushpath(info, "[%d]", level);
+    UNLOCK(thread);
     stk = eris_restorestackidx(thread, offset - 1);
     validate(stk, thread->top - 1);
+    LOCK(thread);
     unpersist(info);                                        /* ... thread tbl */
+    UNLOCK(thread);
     eris_assert(lua_type(info->L, -1) == LUA_TTABLE);
 
     /* Create the open upvalue either way. */
+    LOCK(thread);
     nuv = eris_findupval(thread, stk);
+    UNLOCK(thread);
 
     /* Then check if we need to patch some pointers. */
     lua_rawgeti(info->L, -1, 2);                  /* ... thread tbl upval/nil */
@@ -1907,15 +1956,20 @@ u_thread(Info *info) {                                                 /* ... */
     }
 
     /* Store open upvalue in table for future references. */
+    LOCK(thread);
     lua_pushlightuserdata(info->L, nuv);              /* ... thread tbl upval */
     lua_rawseti(info->L, -2, 2);                            /* ... thread tbl */
     lua_pop(info->L, 1);                                        /* ... thread */
     poppath(info);
+    UNLOCK(thread);
   }
   poppath(info);
 
   eris_assert(lua_type(info->L, -1) == LUA_TTHREAD);
 }
+
+#undef UNLOCK
+#undef LOCK
 
 #undef validate
 
