@@ -14,7 +14,7 @@ At this point, Eris should be considered as a beta-stage product. I have tested 
 Installation
 ============
 
-Think of Eris as a custom "distribution" of Lua. Compile and install Eris like you would Lua. You will get one shared library that will contain both Lua and Eris. The version string has been adjusted to reflect this: `Lua+Eris 5.2.2`.
+Think of Eris as a custom "distribution" of Lua. Compile and install Eris like you would Lua. You will get a shared and/or static library that will contain both Lua and Eris. The version string has been adjusted to reflect this: `Lua+Eris 5.2.2`.
 
 Usage
 =====
@@ -69,7 +69,7 @@ Note that all settings are stored in the registry of the provided Lua state, so 
 Lua
 ---
 
-You can either load Eris as a table onto the Lua stack via `luaopen_eris()` or just call `luaL_openlibs()` which will open it in addition to all other libraries and register the global table `eris`. As with Pluto, there are two functions in this table:
+You can either load Eris as a table onto the Lua stack via `luaopen_eris()` or just call `luaL_openlibs()` which will open it in addition to all other libraries and register the global table `eris`. As with Pluto, there are the two functions for persisting/unpersisting in this table. In addition, there is a function that allows configuring Eris on the fly:
 
 * `string eris.persist([perms,] value)`  
   This persists the provided value and returns the resulting data as a binary string. Note that passing the permanent object table is optional. If only one argument is given Eris assumes it's the object to persist, and the permanent object table is empty. If given, `perms` must be a table. `value` can be any type.
