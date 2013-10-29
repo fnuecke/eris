@@ -115,7 +115,7 @@ Special Persistence
 
 Another concept carried over from Pluto is "special persistence". Tables and userdata can be annotated with a metatable field (named `__persist` per default). This field can be one of three types: `nil` for default behavior, `boolean` or `function`:
 
-* `true` marks the object for literal persistence. This is the default for tables. Trying to literally persist userdata without this will result in an error. If set, however, the userdata's memory block will be written as-is, and read back as-is.
+* `true` marks the object for literal persistence. This is the default for tables. Trying to literally persist userdata without this will result in an error. If set, however, the userdata's memory block will be written as-is, and read back as-is. Note that the table's or userdata's metatable will also be persisted, if present. If you do not want that you'll have to use special persistence (see `function`).
 * `false` marks the object as "forbidden". When such an object is encountered an error will be thrown.
 * `function` is very special indeed. If present, this function will called when the object should be persisted. It must return a closure, which is persisted in place of the original object. The returned closure is then run when unpersisting, and is expected to return an object of the object's original type (i.e. table or userdata). Per default, the function stored in the metatable will receive one parameter, the original object. You can configure Eris to also pass along the used writer and userdata associated with it (see `eris_dump()`).
 
