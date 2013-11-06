@@ -7,7 +7,7 @@ Although my implementation is strongly influenced by Pluto, in my humble opinion
 
 Eris can serialize almost anything you can have in a Lua VM and can unserialize it again at a later point, even in a different VM. This in particular includes yielded coroutines, which is very handy for saving long running, multi-session scripting systems, for example in games: just persist the state into the save file and unpersist it upon load, and the scripts won't even know the game was quit inbetween.
 
-Eris currently requires Lua 5.2.2. It may build with earlier 5.2.x versions, but I have not tried it.
+Eris currently requires Lua 5.2.2. It may build with earlier 5.2.x versions, but I have not tried it. It *won't* work with other Lua implementations, such as LuaJIT, because Eris works directly on some internal structures of vanilla Lua and uses non-API macros and functions.
 
 At this point, Eris should be considered as a beta-stage product. I have tested it somewhat and the testcases that came with Pluto - extended with some Lua 5.2 specific ones, such as yielded `pcall`s - run through successfully. This does not mean it is necessarily stable, though. You have been warned.
 
