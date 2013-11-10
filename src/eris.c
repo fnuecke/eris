@@ -254,7 +254,7 @@ static const char *const kSettingWriteDebugInfo = "debug";
 static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
-static const char *const kHeader = "ERIS";
+static char const kHeader[] = { 'E', 'R', 'I', 'S' };
 #define HEADER_LENGTH sizeof(kHeader)
 
 /* Floating point number used to check compatibility of loaded data. */
