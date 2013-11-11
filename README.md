@@ -7,14 +7,14 @@ Although my implementation is strongly influenced by Pluto, in my humble opinion
 
 Eris can serialize almost anything you can have in a Lua VM and can unserialize it again at a later point, even in a different VM. This in particular includes yielded coroutines, which is very handy for saving long running, multi-session scripting systems, for example in games: just persist the state into the save file and unpersist it upon load, and the scripts won't even know the game was quit inbetween.
 
-Eris currently requires Lua 5.2.2. It may build with earlier 5.2.x versions, but I have not tried it. It *won't* work with other Lua implementations, such as LuaJIT, because Eris works directly on some internal structures of vanilla Lua and uses non-API macros and functions.
+Eris currently comes with Lua 5.2.3. It should also build with 5.2.2. It may build with earlier 5.2.x versions, but I have not tried it. It *won't* work with other Lua implementations, such as LuaJIT, because Eris works directly on some internal structures of vanilla Lua and uses non-API macros and functions.
 
 At this point, Eris should be considered as a beta-stage product. I have tested it somewhat and the testcases that came with Pluto - extended with some Lua 5.2 specific ones, such as yielded `pcall`s - run through successfully. This does not mean it is necessarily stable, though. You have been warned.
 
 Installation
 ============
 
-Think of Eris as a custom "distribution" of Lua. Compile and install Eris like you would Lua. You will get a shared and/or static library that will contain both Lua and Eris. The version string has been adjusted to reflect this: `Lua+Eris 5.2.2`.
+Think of Eris as a custom "distribution" of Lua. Compile and install Eris like you would Lua. You will get a shared and/or static library that will contain both Lua and Eris. The version string has been adjusted to reflect this: `Lua+Eris 5.2.3`.
 
 Usage
 =====
@@ -168,7 +168,7 @@ Limitations
 Core library
 ============
 
-You will notice that I decided to bundle this with Lua 5.2.2 directly, instead of as a standalone library. This is in part due to how deeply Eris has to interact with Lua. It has to manually create internal data structures and populate them. Later versions of Pluto worked around this by extracting the used internal functions and only bundling those with the library. I decided against this for now, since with Lua 5.2 there's another thing that I need access to: the internally used C resume functions, used for yieldable C calls in the libraries (e.g. `pcall`). I had to patch the library sources by adding a function that pushed these C functions to the table with permanent values. These patches are very unintrusive: they just add a couple of lines to the end of the relevant library files. This means it is possible to persist a yielded `pcall` out of the box.
+You will notice that I decided to bundle this with Lua directly, instead of as a standalone library. This is in part due to how deeply Eris has to interact with Lua. It has to manually create internal data structures and populate them. Later versions of Pluto worked around this by extracting the used internal functions and only bundling those with the library. I decided against this for now, since with Lua 5.2 there's another thing that I need access to: the internally used C resume functions, used for yieldable C calls in the libraries (e.g. `pcall`). I had to patch the library sources by adding a function that pushed these C functions to the table with permanent values. These patches are very unintrusive: they just add a couple of lines to the end of the relevant library files. This means it is possible to persist a yielded `pcall` out of the box.
 
 Testing
 =======
