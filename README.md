@@ -37,7 +37,7 @@ Like Pluto, Eris offers two functions to persist to or read from an arbitrary so
   This provides an interface to Eris' unpersist functionality for reading in an arbitrary way, using a reader. When called, the stack in `L` must look like this:
   1. `perms:table`  
 
-  That is, `perms` must be a table at stack position 1. This table is used as the permanent objcet table. This must hold the inverse mapping present in the permanent object table used when persisting. `reader` is the reader function used to read all data, `ud` is passed to the reader function whenever it is called. The result of the operation will be pushed onto the stack.
+  That is, `perms` must be a table at stack position 1. This table is used as the permanent object table. This must hold the inverse mapping present in the permanent object table used when persisting. `reader` is the reader function used to read all data, `ud` is passed to the reader function whenever it is called. The result of the operation will be pushed onto the stack.
 
   This function is equivalent to `pluto_unpersist`. The function will only check the stack's top. Like Pluto, Eris uses Lua's own ZIO to handle buffered reading. Note that unlike with Pluto, the value can in fact be `nil`.
 
