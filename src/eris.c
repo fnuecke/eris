@@ -2296,11 +2296,12 @@ p_header(Info *info) {
 static void
 u_header(Info *info) {
   char header[HEADER_LENGTH];
+  uint8_t number_size;
   READ_RAW(header, HEADER_LENGTH);
   if (strncmp(kHeader, header, HEADER_LENGTH)) {
     luaL_error(info->L, "invalid data");
   }
-  uint8_t number_size = READ_VALUE(uint8_t);
+  number_size = READ_VALUE(uint8_t);
   if (number_size == 0) {
     /* Old 64-bit versions of eris wrote '\0' and then three random bytes. */
     /* We skip them here for backwards compatibility. */
