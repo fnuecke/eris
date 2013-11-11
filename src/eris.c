@@ -254,7 +254,7 @@ static const char *const kSettingWriteDebugInfo = "debug";
 static const char *const kSettingMaxComplexity = "maxrec";
 
 /* Header we prefix to persisted data for a quick check when unpersisting. */
-static const char *const kHeader = "ERIS";
+static char const kHeader[] = { 'E', 'R', 'I', 'S' };
 #define HEADER_LENGTH sizeof(kHeader)
 
 /* Floating point number used to check compatibility of loaded data. */
@@ -2300,7 +2300,16 @@ u_header(Info *info) {
   if (strncmp(kHeader, header, HEADER_LENGTH)) {
     luaL_error(info->L, "invalid data");
   }
-  if (READ_VALUE(uint8_t) != sizeof(lua_Number)) {
+  uint8_t number_size = READ_VALUE(uint8_t);
+  if (number_size == 0) {
+    /* Old 64-bit versions of eris wrote '\0' and then three random bytes. */
+    /* We skip them here for backwards compatibility. */
+    char throw_away[3];
+    READ_RAW(throw_away, 3);
+
+    number_size = READ_VALUE(uint8_t);
+  }
+  if (number_size != sizeof(lua_Number)) {
     luaL_error(info->L, "incompatible floating point type");
   }
   /* In this case we really do want floating point equality. */
