@@ -121,6 +121,7 @@ static const lua_Unsigned kMaxComplexity = 10000;
 #define eris_reallocvector luaM_reallocvector
 /* lobject.h */
 #define eris_ttypenv ttypenv
+#define eris_clLvalue clLvalue
 #define eris_setnilvalue setnilvalue
 #define eris_setclLvalue setclLvalue
 #define eris_setobj setobj
@@ -265,6 +266,12 @@ static const lua_Number kHeaderNumber = (lua_Number)-1.234567890;
 #define REFTIDX 2
 #define BUFFIDX 3
 #define PATHIDX 4
+
+/* Table indices for upvalue tables, keeping track of upvals to open. */
+#define UVTOCL 1
+#define UVTONU 2
+#define UVTVAL 3
+#define UVTREF 4
 
 /* }======================================================================== */
 
@@ -1326,12 +1333,14 @@ static void
 u_upval(Info *info) {                                                  /* ... */
   eris_checkstack(info->L, 2);
 
-  /* Create the table we use to store the pointer to the actual upval (1), the
-   * value of the upval (2) and any pointers to the pointer to the upval (3+).*/
-  lua_createtable(info->L, 3, 0);                                  /* ... tbl */
+  /* Create the table we use to store the stack location to the upval (1+2),
+   * the value of the upval (3) and any references to the upvalue's value (4+).
+   * References are stored as two entries each, the actual closure holding the
+   * upvalue, and the index of the upvalue in that closure. */
+  lua_createtable(info->L, 5, 0);                                  /* ... tbl */
   registerobject(info);
   unpersist(info);                                             /* ... tbl obj */
-  lua_rawseti(info->L, -2, 1);                                     /* ... tbl */
+  lua_rawseti(info->L, -2, UVTVAL);                                /* ... tbl */
 
   eris_assert(lua_type(info->L, -1) == LUA_TTABLE);
 }
@@ -1387,7 +1396,7 @@ p_closure(Info *info) {                              /* perms reftbl ... func */
       break;
     }
     case LUA_TLCL: /* Lua function */ {               /* perms reftbl ... lcl */
-      LClosure *cl = clLvalue(info->L->top - 1);
+      LClosure *cl = eris_clLvalue(info->L->top - 1);
       /* Mark it as a Lua closure. */
       WRITE_VALUE(false, uint8_t);
       /* Write the upvalue count first, since we have to know it when creating
@@ -1524,50 +1533,63 @@ u_closure(Info *info) {                                                /* ... */
       }
       unpersist(info);                                         /* ... lcl tbl */
       eris_assert(lua_type(info->L, -1) == LUA_TTABLE);
-      lua_rawgeti(info->L, -1, 2);                   /* ... lcl tbl upval/nil */
+      lua_rawgeti(info->L, -1, UVTOCL);               /* ... lcl tbl olcl/nil */
       if (lua_isnil(info->L, -1)) {                        /* ... lcl tbl nil */
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
+        lua_pushvalue(info->L, -2);                        /* ... lcl tbl lcl */
+        lua_rawseti(info->L, -2, UVTOCL);                      /* ... lcl tbl */
+        lua_pushinteger(info->L, nup);                     /* ... lcl tbl nup */
+        lua_rawseti(info->L, -2, UVTONU);                      /* ... lcl tbl */
         *uv = eris_newupval(info->L);
-        lua_pushlightuserdata(info->L, *uv);             /* ... lcl tbl upval */
-        lua_rawseti(info->L, -2, 2);                           /* ... lcl tbl */
       }
-      else {                                             /* ... lcl tbl upval */
-        eris_assert(lua_type(info->L, -1) == LUA_TLIGHTUSERDATA);
-        *uv = (UpVal*)lua_touserdata(info->L, -1);
+      else {                                              /* ... lcl tbl olcl */
+        LClosure *ocl;
+        int onup;
+        eris_assert(lua_type(info->L, -1) == LUA_TFUNCTION);
+        ocl = eris_clLvalue(info->L->top - 1);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
+        lua_rawgeti(info->L, -1, UVTONU);                 /* ... lcl tbl onup */
+        eris_assert(lua_type(info->L, -1) == LUA_TNUMBER);
+        onup = lua_tointeger(info->L, -1);
+        lua_pop(info->L, 1);                                   /* ... lcl tbl */
+        *uv = ocl->upvals[onup - 1];
       }
 
       /* Set the upvalue's actual value and add our reference to the upvalue to
-       * the list, for pointer patching if we have to open the upvalue in
+       * the list, for reference patching if we have to open the upvalue in
        * u_thread. Either is only necessary if the upvalue is still closed. */
       if ((*uv)->v == &(*uv)->u.value) {
+        int i;
         /* Always update the value of the upvalue's value for closed upvalues,
          * even if we re-used one - if we had a cycle, it might have been
-         * incorrectly initialized to nil before. */
-        lua_rawgeti(info->L, -1, 1);                       /* ... lcl tbl obj */
+         * incorrectly initialized to nil before (or rather, not yet set). */
+        lua_rawgeti(info->L, -1, UVTVAL);                  /* ... lcl tbl obj */
         eris_setobj(info->L, &(*uv)->u.value, info->L->top - 1);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
 
-        lua_pushlightuserdata(info->L, uv);             /* ... lcl tbl upvalp */
-        if (luaL_len(info->L, -2) >= 2) {
-          /* Got a valid sequence, insert at the end. */
-          lua_rawseti(info->L, -2, luaL_len(info->L, -2) + 1); /* ... lcl tbl */
+        lua_pushinteger(info->L, nup);                     /* ... lcl tbl nup */
+        lua_pushvalue(info->L, -3);                    /* ... lcl tbl nup lcl */
+        if (luaL_len(info->L, -3) >= UVTVAL) {
+          /* Got a valid sequence (value already set), insert at the end. */
+          i = luaL_len(info->L, -3);
+          lua_rawseti(info->L, -3, i + 1);                 /* ... lcl tbl nup */
+          lua_rawseti(info->L, -2, i + 2);                     /* ... lcl tbl */
         }
-        else {                                          /* ... lcl tbl upvalp */
-          int i;
+        else {                                         /* ... lcl tbl nup lcl */
           /* Find where to insert. This can happen if we have cycles, in which
            * case the table is not fully initialized at this point, i.e. the
            * value is not in it, yet (we work around that by always setting it,
            * as seen above). */
-          for (i = 3;; ++i) {
-            lua_rawgeti(info->L, -2, i);     /* ... lcl tbl upvalp upvalp/nil */
-            if (lua_isnil(info->L, -1)) {           /* ... lcl tbl upvalp nil */
-              lua_pop(info->L, 1);                      /* ... lcl tbl upvalp */
-              lua_rawseti(info->L, -2, i);                     /* ... lcl tbl */
+          for (i = UVTREF;; i += 2) {
+            lua_rawgeti(info->L, -3, i);       /* ... lcl tbl nup lcl lcl/nil */
+            if (lua_isnil(info->L, -1)) {          /* ... lcl tbl nup lcl nil */
+              lua_pop(info->L, 1);                     /* ... lcl tbl nup lcl */
+              lua_rawseti(info->L, -3, i);                 /* ... lcl tbl nup */
+              lua_rawseti(info->L, -2, i + 1);                 /* ... lcl tbl */
               break;
             }
             else {
-              lua_pop(info->L, 1);                      /* ... lcl tbl upvalp */
+              lua_pop(info->L, 1);                     /* ... lcl tbl nup lcl */
             }
           }                                                    /* ... lcl tbl */
         }
@@ -1920,7 +1942,7 @@ u_thread(Info *info) {                                                 /* ... */
    * functions using them having been unpersisted (they'll usually be in the
    * stack of the thread). For this reason we store all previous references to
    * the upvalue in a table that is returned when we try to unpersist an
-   * upvalue, so that we can adjust these pointers in here. */
+   * upvalue, so that we can adjust these references in here. */
   LOCK(thread);
   pushpath(info, ".openupval");
   UNLOCK(thread);
@@ -1949,19 +1971,25 @@ u_thread(Info *info) {                                                 /* ... */
     nuv = eris_findupval(thread, stk);
     UNLOCK(thread);
 
-    /* Then check if we need to patch some pointers. */
-    lua_rawgeti(info->L, -1, 2);                  /* ... thread tbl upval/nil */
-    if (!lua_isnil(info->L, -1)) {                    /* ... thread tbl upval */
+    /* Then check if we need to patch some references. */
+    lua_rawgeti(info->L, -1, UVTREF);               /* ... thread tbl lcl/nil */
+    if (!lua_isnil(info->L, -1)) {                      /* ... thread tbl lcl */
       int i, n;
-      eris_assert(lua_type(info->L, -1) == LUA_TLIGHTUSERDATA);
+      eris_assert(lua_type(info->L, -1) == LUA_TFUNCTION);
       /* Already exists, replace it. To do this we have to patch all the
-       * pointers to the already existing one, which we added to the table in
-       * u_closure, starting at index 3. */
+       * references to the already existing one, which we added to the table in
+       * u_closure. */
       lua_pop(info->L, 1);                                  /* ... thread tbl */
-      for (i = 3, n = luaL_len(info->L, -1); i <= n; ++i) {
-        lua_rawgeti(info->L, -1, i);                 /* ... thread tbl upvalp */
-        (*(UpVal**)lua_touserdata(info->L, -1)) = nuv;
+      for (i = UVTREF, n = luaL_len(info->L, -1); i <= n; i += 2) {
+        LClosure *cl;
+        int nup;
+        lua_rawgeti(info->L, -1, i);                    /* ... thread tbl lcl */
+        cl = eris_clLvalue(info->L->top - 1);
         lua_pop(info->L, 1);                                /* ... thread tbl */
+        lua_rawgeti(info->L, -1, i + 1);                /* ... thread tbl nup */
+        nup = lua_tointeger(info->L, -1);
+        lua_pop(info->L, 1);                                /* ... thread tbl */
+        cl->upvals[nup - 1] = nuv;
       }
     }
     else {                                              /* ... thread tbl nil */
