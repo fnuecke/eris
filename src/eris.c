@@ -1553,6 +1553,7 @@ u_closure(Info *info) {                                                /* ... */
         onup = lua_tointeger(info->L, -1);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
         *uv = ocl->upvals[onup - 1];
+        luaC_objbarrier(info->L, cl, *uv);
       }
 
       /* Set the upvalue's actual value and add our reference to the upvalue to
@@ -1990,6 +1991,7 @@ u_thread(Info *info) {                                                 /* ... */
         nup = lua_tointeger(info->L, -1);
         lua_pop(info->L, 1);                                /* ... thread tbl */
         cl->upvals[nup - 1] = nuv;
+        luaC_objbarrier(info->L, cl, nuv);
       }
     }
     else {                                              /* ... thread tbl nil */
@@ -1999,8 +2001,6 @@ u_thread(Info *info) {                                                 /* ... */
 
     /* Store open upvalue in table for future references. */
     LOCK(thread);
-    lua_pushlightuserdata(info->L, nuv);              /* ... thread tbl upval */
-    lua_rawseti(info->L, -2, 2);                            /* ... thread tbl */
     lua_pop(info->L, 1);                                        /* ... thread */
     poppath(info);
     UNLOCK(thread);
