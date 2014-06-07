@@ -1593,7 +1593,7 @@ p_thread(Info *info) {                                          /* ... thread */
   size_t level;
   StkId o;
   CallInfo *ci;
-  UpVal *uv;
+  GCObject *uvi;
 
   eris_checkstack(info->L, 2);
 
@@ -1719,10 +1719,11 @@ p_thread(Info *info) {                                          /* ... thread */
   pushpath(info, ".openupval");
   lua_pushnil(info->L);                                     /* ... thread nil */
   level = 0;
-  for (uv = eris_gco2uv(thread->openupval);
-       uv != NULL;
-       uv = eris_gco2uv(eris_gch(eris_obj2gco(uv))->next))
+  for (uvi = thread->openupval;
+       uvi != NULL;
+       uvi = eris_gch(uvi)->next)
   {
+    UpVal *uv = eris_gco2uv(uvi);
     pushpath(info, "[%d]", level);
     WRITE_VALUE(eris_savestackidx(thread, uv->v) + 1, size_t);
     eris_setobj(info->L, info->L->top - 1, uv->v);          /* ... thread obj */
