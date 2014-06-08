@@ -1553,8 +1553,8 @@ u_closure(Info *info) {                                                /* ... */
         onup = lua_tointeger(info->L, -1);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
         *uv = ocl->upvals[onup - 1];
-        luaC_objbarrier(info->L, cl, *uv);
       }
+      luaC_objbarrier(info->L, cl, *uv);
 
       /* Set the upvalue's actual value and add our reference to the upvalue to
        * the list, for reference patching if we have to open the upvalue in
@@ -1990,6 +1990,7 @@ u_thread(Info *info) {                                                 /* ... */
         lua_rawgeti(info->L, -1, i + 1);                /* ... thread tbl nup */
         nup = lua_tointeger(info->L, -1);
         lua_pop(info->L, 1);                                /* ... thread tbl */
+        /* Open the upvalue by pointing to the stack and register in GC. */
         cl->upvals[nup - 1] = nuv;
         luaC_objbarrier(info->L, cl, nuv);
       }
