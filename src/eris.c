@@ -177,6 +177,47 @@ extern void eris_permstrlib(lua_State *L, bool forUnpersist);
 
 /*
 ** ============================================================================
+** Language strings for errors.
+** ============================================================================
+*/
+
+#define ERIS_ERR_CFUNC "attempt to persist a light C function (%p)"
+#define ERIS_ERR_COMPLEXITY "object too complex"
+#define ERIS_ERR_HOOK "cannot persist yielded hooks"
+#define ERIS_ERR_METATABLE "bad metatable, not nil or table"
+#define ERIS_ERR_NOFUNC "attempt to persist unknown function type"
+#define ERIS_ERR_READ "could not read data"
+#define ERIS_ERR_SPER_FUNC "%s did not return a function"
+#define ERIS_ERR_SPER_LOAD "bad unpersist function (%s expected, returned %s)"
+#define ERIS_ERR_SPER_PROT "attempt to persist forbidden table"
+#define ERIS_ERR_SPER_TYPE "%d not nil, boolean, or function"
+#define ERIS_ERR_SPER_UFUNC "invalid restore function"
+#define ERIS_ERR_SPER_UPERM "bad permanent value (%s expected, got %s)"
+#define ERIS_ERR_SPER_UPERMNIL "bad permanent value (no value)"
+#define ERIS_ERR_STACKBOUNDS "stack index out of bounds"
+#define ERIS_ERR_TABLE "bad table value, got a nil value"
+#define ERIS_ERR_THREAD "cannot persist currently running thread"
+#define ERIS_ERR_THREADCI "invalid callinfo"
+#define ERIS_ERR_THREADCTX "bad C continuation function"
+#define ERIS_ERR_THREADERRF "invalid errfunc"
+#define ERIS_ERR_THREADPC "saved program counter out of bounds"
+#define ERIS_ERR_TRUNC_INT "int value would get truncated"
+#define ERIS_ERR_TRUNC_SIZE "size_t value would get truncated"
+#define ERIS_ERR_TYPE_FLOAT "unsupported lua_Number type"
+#define ERIS_ERR_TYPE_INT "unsupported int type"
+#define ERIS_ERR_TYPE_SIZE "unsupported size_t type"
+#define ERIS_ERR_TYPEP "trying to persist unknown type %d"
+#define ERIS_ERR_TYPEU "trying to unpersist unknown type %d"
+#define ERIS_ERR_UCFUNC "bad C closure (C function expected, got %s)"
+#define ERIS_ERR_UCFUNCNULL "bad C closure (C function expected, got null)"
+#define ERIS_ERR_USERDATA "attempt to literally persist userdata"
+#define ERIS_ERR_WRITE "could not write data"
+#define ERIS_ERR_REF "invalid reference #%d. this usually means a special "\
+                      "persistence callback of a table referenced said table "\
+                      "(directly or indirectly via an upvalue)."
+
+/*
+** ============================================================================
 ** Constants, settings, types and forward declarations.
 ** ============================================================================
 */
@@ -434,7 +475,7 @@ checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
 /* Writes a raw memory block with the specified size. */
 #define WRITE_RAW(value, size) {\
   if (info->u.pi.writer(info->L, (value), (size), info->u.pi.ud)) \
-    eris_error(info, "could not write data"); }
+    eris_error(info, ERIS_ERR_WRITE); }
 
 /* Writes a single value with the specified type. */
 #define WRITE_VALUE(value, type) write_##type(info, value)
@@ -448,7 +489,7 @@ checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
 /* Reads a raw block of memory with the specified size. */
 #define READ_RAW(value, size) {\
   if (eris_read(&info->u.upi.zio, (value), (size))) \
-    eris_error(info, "could not read data"); }
+    eris_error(info, ERIS_ERR_READ); }
 
 /* Reads a single value with the specified type. */
 #define READ_VALUE(type) read_##type(info)
@@ -534,7 +575,7 @@ write_int(Info *info, int value) {
     write_int64_t(info, value);
   }
   else {
-    eris_error(info, "unsupported int type");
+    eris_error(info, ERIS_ERR_TYPE_INT);
   }
 }
 
@@ -550,7 +591,7 @@ write_size_t(Info *info, size_t value) {
     write_uint64_t(info, value);
   }
   else {
-    eris_error(info, "unsupported size_t type");
+    eris_error(info, ERIS_ERR_TYPE_SIZE);
   }
 }
 
@@ -563,7 +604,7 @@ write_lua_Number(Info *info, lua_Number value) {
     write_float64(info, value);
   }
   else {
-    eris_error(info, "unsupported lua_Number type");
+    eris_error(info, ERIS_ERR_TYPE_FLOAT);
   }
 }
 
@@ -664,25 +705,25 @@ read_int(Info *info) {
     int16_t pvalue = read_int16_t(info);
     value = (int)pvalue;
     if ((int32_t)value != pvalue) {
-      eris_error(info, "int value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_INT);
     }
   }
   else if (info->u.upi.sizeof_int == sizeof(int32_t)) {
     int32_t pvalue = read_int32_t(info);
     value = (int)pvalue;
     if ((int32_t)value != pvalue) {
-      eris_error(info, "int value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_INT);
     }
   }
   else if (info->u.upi.sizeof_int == sizeof(int64_t)) {
     int64_t pvalue = read_int64_t(info);
     value = (int)pvalue;
     if ((int64_t)value != pvalue) {
-      eris_error(info, "int value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_INT);
     }
   }
   else {
-    eris_error(info, "unsupported int type");
+    eris_error(info, ERIS_ERR_TYPE_INT);
     value = 0; /* not reached */
   }
   return value;
@@ -695,25 +736,25 @@ read_size_t(Info *info) {
     uint16_t pvalue = read_uint16_t(info);
     value = (size_t)pvalue;
     if ((uint32_t)value != pvalue) {
-      eris_error(info, "size_t value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_SIZE);
     }
   }
   else if (info->u.upi.sizeof_size_t == sizeof(uint32_t)) {
     uint32_t pvalue = read_uint32_t(info);
     value = (size_t)pvalue;
     if ((uint32_t)value != pvalue) {
-      eris_error(info, "size_t value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_SIZE);
     }
   }
   else if (info->u.upi.sizeof_size_t == sizeof(uint64_t)) {
     uint64_t pvalue = read_uint64_t(info);
     value = (size_t)pvalue;
     if ((uint64_t)value != pvalue) {
-      eris_error(info, "size_t value would get truncated");
+      eris_error(info, ERIS_ERR_TRUNC_SIZE);
     }
   }
   else {
-    eris_error(info, "unsupported size_t type");
+    eris_error(info, ERIS_ERR_TYPE_SIZE);
     value = 0; /* not reached */
   }
   return value;
@@ -728,7 +769,7 @@ read_lua_Number(Info *info) {
     return read_float64(info);
   }
   else {
-    eris_error(info, "unsupported lua_Number type");
+    eris_error(info, ERIS_ERR_TYPE_FLOAT);
     return 0; /* not reached */
   }
 }
@@ -850,7 +891,7 @@ u_metatable(Info *info) {                                          /* ... tbl */
     lua_pop(info->L, 1);                                           /* ... tbl */
   }
   else {                                                            /* tbl :( */
-    eris_error(info, "bad metatable, not nil or table");
+    eris_error(info, ERIS_ERR_METATABLE);
   }
   poppath(info);
 }
@@ -930,7 +971,7 @@ u_literaltable(Info *info) {                                           /* ... */
       lua_rawset(info->L, -3);                                     /* ... tbl */
     }
     else {
-      eris_error(info, "bad table value, got a nil value");
+      eris_error(info, ERIS_ERR_TABLE);
     }
 
     poppath(info);
@@ -1003,8 +1044,7 @@ p_special(Info *info, Callback literal) {                          /* ... obj */
           lua_call(info->L, 1, 1);                           /* ... obj func? */
         }
         if (!lua_isfunction(info->L, -1)) {                     /* ... obj :( */
-          eris_error(info, "%s did not return a function",
-                     info->u.pi.metafield);
+          eris_error(info, ERIS_ERR_SPER_FUNC, info->u.pi.metafield);
         }                                                     /* ... obj func */
 
         /* Special persistence, call this function when unpersisting. */
@@ -1013,8 +1053,7 @@ p_special(Info *info, Callback literal) {                          /* ... obj */
         lua_pop(info->L, 1);                                       /* ... obj */
         return;
       default:                                               /* ... obj mt :( */
-        eris_error(info, "%d not nil, boolean, or function",
-                   info->u.pi.metafield);
+        eris_error(info, ERIS_ERR_SPER_TYPE, info->u.pi.metafield);
         return; /* not reached */
     }
   }
@@ -1025,10 +1064,10 @@ p_special(Info *info, Callback literal) {                          /* ... obj */
     literal(info);                                                 /* ... obj */
   }
   else if (lua_type(info->L, -1) == LUA_TTABLE) {
-    eris_error(info, "attempt to persist forbidden table");
+    eris_error(info, ERIS_ERR_SPER_PROT);
   }
   else {
-    eris_error(info, "attempt to literally persist userdata");
+    eris_error(info, ERIS_ERR_USERDATA);
   }
 }
 
@@ -1047,7 +1086,7 @@ u_special(Info *info, int type, Callback literal) {                    /* ... */
      * persisting a special object. */
     unpersist(info);                                           /* ... spfunc? */
     if (!lua_isfunction(info->L, -1)) {                             /* ... :( */
-      eris_error(info, "invalid restore function");
+      eris_error(info, ERIS_ERR_SPER_UFUNC);
     }                                                           /* ... spfunc */
 
     if (info->passIOToPersist) {
@@ -1058,8 +1097,9 @@ u_special(Info *info, int type, Callback literal) {                    /* ... */
     }
 
     if (lua_type(info->L, -1) != type) {                            /* ... :( */
-      eris_error(info, "bad unpersist function (%s expected, returned %s)",
-                       kTypenames[type], kTypenames[lua_type(info->L, -1)]);
+      const char *want = kTypenames[type];
+      const char *have = kTypenames[lua_type(info->L, -1)];
+      eris_error(info, ERIS_ERR_SPER_LOAD, want, have);
     }                                                              /* ... obj */
 
     /* Update the reftable entry. */
@@ -1363,8 +1403,7 @@ p_closure(Info *info) {                              /* perms reftbl ... func */
   switch (ttype(info->L->top - 1)) {
     case LUA_TLCF: /* light C function */
       /* We cannot persist these, they have to be handled via the permtable. */
-      eris_error(info, "attempt to persist a light C function (%p)",
-                 lua_tocfunction(info->L, -1));
+      eris_error(info, ERIS_ERR_CFUNC, lua_tocfunction(info->L, -1));
       return; /* not reached */
     case LUA_TCCL: /* C closure */ {                  /* perms reftbl ... ccl */
       CClosure *cl = clCvalue(info->L->top - 1);
@@ -1430,7 +1469,7 @@ p_closure(Info *info) {                              /* perms reftbl ... func */
       break;
     }
     default:
-      eris_error(info, "attempt to persist unknown function type");
+      eris_error(info, ERIS_ERR_NOFUNC);
       return; /* not reached */
   }
 }
@@ -1453,12 +1492,11 @@ u_closure(Info *info) {                                                /* ... */
     /* Read the C function from the permanents table. */
     unpersist(info);                                             /* ... cfunc */
     if (!lua_iscfunction(info->L, -1)) {
-      eris_error(info, "bad C closure (C function expected, got %s)",
-                 kTypenames[lua_type(info->L, -1)]);
+      eris_error(info, ERIS_ERR_UCFUNC, kTypenames[lua_type(info->L, -1)]);
     }
     f = lua_tocfunction(info->L, -1);
     if (!f) {
-      eris_error(info, "bad C closure (C function expected, got null)");
+      eris_error(info, ERIS_ERR_UCFUNCNULL);
     }
     lua_pop(info->L, 1);                                               /* ... */
 
@@ -1623,7 +1661,7 @@ p_thread(Info *info) {                                          /* ... thread */
   /* We cannot persist any running threads, because by definition we *are* that
    * running thread. And we use the stack. So yeah, really not a good idea. */
   if (thread == info->L) {
-    eris_error(info, "cannot persist currently running thread");
+    eris_error(info, ERIS_ERR_THREAD);
     return; /* not reached */
   }
 
@@ -1702,7 +1740,7 @@ p_thread(Info *info) {                                          /* ... thread */
 
     eris_assert(eris_isLua(ci) || (ci->callstatus & CIST_TAIL) == 0);
     if (ci->callstatus & CIST_HOOKYIELD) {
-      eris_error(info, "cannot persist yielded hooks");
+      eris_error(info, ERIS_ERR_HOOK);
     }
 
     if (eris_isLua(ci)) {
@@ -1763,7 +1801,7 @@ p_thread(Info *info) {                                          /* ... thread */
 #define validate(stackpos, inclmax) \
   if ((stackpos) < thread->stack || stackpos > (inclmax)) { \
     (stackpos) = thread->stack; \
-    eris_error(info, "stack index out of bounds"); }
+    eris_error(info, ERIS_ERR_STACKBOUNDS); }
 
 /* I had so hoped to get by without any 'hacks', but I surrender. We mark the
  * thread as incomplete to avoid the GC messing with it while we're building
@@ -1830,7 +1868,7 @@ u_thread(Info *info) {                                                 /* ... */
     o = eris_restorestack(thread, thread->errfunc);
     validate(o, thread->top);
     if (eris_ttypenv(o) != LUA_TFUNCTION) {
-      eris_error(info, "invalid errfunc");
+      eris_error(info, ERIS_ERR_THREADERRF);
     }
   }
   /* These are only used while a thread is being executed or can be deduced:
@@ -1866,7 +1904,7 @@ u_thread(Info *info) {                                                 /* ... */
       o = eris_restorestack(thread, thread->ci->extra);
       validate(o, thread->top);
       if (eris_ttypenv(o) != LUA_TFUNCTION) {
-        eris_error(info, "invalid callinfo");
+        eris_error(info, ERIS_ERR_THREADCI);
       }
     }
 
@@ -1879,7 +1917,7 @@ u_thread(Info *info) {                                                 /* ... */
           thread->ci->u.l.savedpc > lcl->p->code + lcl->p->sizecode)
       {
         thread->ci->u.l.savedpc = lcl->p->code; /* Just to be safe. */
-        eris_error(info, "saved program counter out of bounds");
+        eris_error(info, ERIS_ERR_THREADPC);
       }
     }
     else {
@@ -1901,7 +1939,7 @@ u_thread(Info *info) {                                                 /* ... */
           thread->ci->u.c.k = lua_tocfunction(info->L, -1);
         }
         else {
-          eris_error(info, "bad C continuation function");
+          eris_error(info, ERIS_ERR_THREADCTX);
           return; /* not reached */
         }
         lua_pop(info->L, 1);                                    /* ... thread */
@@ -1929,7 +1967,7 @@ u_thread(Info *info) {                                                 /* ... */
     o = eris_restorestack(thread, thread->ci->extra);
     validate(o, thread->top);
     if (eris_ttypenv(o) != LUA_TFUNCTION) {
-      eris_error(info, "invalid callinfo");
+      eris_error(info, ERIS_ERR_THREADCI);
     }
   }
   LOCK(thread);
@@ -2026,7 +2064,7 @@ static void
 persist_typed(Info *info, int type) {                 /* perms reftbl ... obj */
   eris_ifassert(const int top = lua_gettop(info->L));
   if (info->level >= info->maxComplexity) {
-    eris_error(info, "object too complex");
+    eris_error(info, ERIS_ERR_COMPLEXITY);
   }
   ++info->level;
 
@@ -2063,7 +2101,7 @@ persist_typed(Info *info, int type) {                 /* perms reftbl ... obj */
       p_upval(info);
       break;
     default:
-      eris_error(info, "trying to persist unknown type");
+      eris_error(info, ERIS_ERR_TYPEP, type);
   }                                                   /* perms reftbl ... obj */
 
   --info->level;
@@ -2160,13 +2198,14 @@ u_permanent(Info *info) {                                 /* perms reftbl ... */
   if (lua_isnil(info->L, -1)) {                       /* perms reftbl ... nil */
     /* Since we may need permanent values to rebuild other structures, namely
      * closures and threads, we cannot allow perms to fail unpersisting. */
-    eris_error(info, "bad permanent value (no value)");
+    eris_error(info, ERIS_ERR_SPER_UPERMNIL);
   }
   else if (lua_type(info->L, -1) != type) {            /* perms reftbl ... :( */
     /* For the same reason that we cannot allow nil we must also require the
      * unpersisted value to be of the correct type. */
-    eris_error(info, "bad permanent value (%s expected, got %s)",
-      kTypenames[type], kTypenames[lua_type(info->L, -1)]);
+    const char *want = kTypenames[type];
+    const char *have = kTypenames[lua_type(info->L, -1)];
+    eris_error(info, ERIS_ERR_SPER_UPERM, want, have);
   }                                                   /* perms reftbl ... obj */
   /* Create the entry in the reftable. */
   lua_pushvalue(info->L, -1);                     /* perms reftbl ... obj obj */
@@ -2177,7 +2216,7 @@ static void
 unpersist(Info *info) {                                   /* perms reftbl ... */
   eris_ifassert(const int top = lua_gettop(info->L));
   if (info->level >= info->maxComplexity) {
-    eris_error(info, "object too complex");
+    eris_error(info, ERIS_ERR_COMPLEXITY);
   }
   ++info->level;
 
@@ -2188,7 +2227,7 @@ unpersist(Info *info) {                                   /* perms reftbl ... */
       const int reference = typeOrReference - ERIS_REFERENCE_OFFSET;
       lua_rawgeti(info->L, REFTIDX, reference);   /* perms reftbl ud ... obj? */
       if (lua_isnil(info->L, -1)) {                 /* perms reftbl ud ... :( */
-        eris_error(info, "invalid reference #%d", reference);
+        eris_error(info, ERIS_ERR_REF, reference);
       }                                            /* perms reftbl ud ... obj */
     }
     else {
@@ -2231,7 +2270,7 @@ unpersist(Info *info) {                                   /* perms reftbl ... */
           u_permanent(info);
           break;
         default:
-          eris_error(info, "trying to unpersist unknown type %d", type);
+          eris_error(info, ERIS_ERR_TYPEU, type);
       }                                              /* perms reftbl ... obj? */
     }
   }
