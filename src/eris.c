@@ -1651,8 +1651,7 @@ u_closure(Info *info) {                                                /* ... */
 static void
 p_thread(Info *info) {                                          /* ... thread */
   lua_State* thread = lua_tothread(info->L, -1);
-  size_t level;
-  StkId o;
+  size_t level = 0, total = thread->top - thread->stack;
   CallInfo *ci;
   GCObject *uvi;
 
@@ -1667,7 +1666,7 @@ p_thread(Info *info) {                                          /* ... thread */
 
   /* Persist the stack. Save the total size and used space first. */
   WRITE_VALUE(thread->stacksize, int);
-  WRITE_VALUE(thread->top - thread->stack, size_t);
+  WRITE_VALUE(total, size_t);
 
   /* The Lua stack looks like this:
    * stack ... top ... stack_last
@@ -1675,10 +1674,15 @@ p_thread(Info *info) {                                          /* ... thread */
    * element, i.e. there's nothing stored there. So we stop one below that. */
   pushpath(info, ".stack");
   lua_pushnil(info->L);                                     /* ... thread nil */
-  level = 0;
-  for (o = thread->stack; o < thread->top; ++o) {
-    pushpath(info, "[%d]", level++);
-    eris_setobj(info->L, info->L->top - 1, o);              /* ... thread obj */
+  /* Since the thread's stack may be re-allocated in the meantime, we cannot
+   * use pointer arithmetic here (i.e. o = thread->stack; ...; ++o). Instead we
+   * have to keep track of our position in the stack directly (which we do for
+   * the path info anyway) and compute the actual address each time.
+   */
+  for (; level < total; ++level) {
+    pushpath(info, "[%d]", level);
+    eris_setobj(info->L, info->L->top - 1, thread->stack + level);
+                                                            /* ... thread obj */
     persist(info);                                          /* ... thread obj */
     poppath(info);
   }
@@ -1785,7 +1789,7 @@ p_thread(Info *info) {                                          /* ... thread */
        uvi = eris_gch(uvi)->next)
   {
     UpVal *uv = eris_gco2uv(uvi);
-    pushpath(info, "[%d]", level);
+    pushpath(info, "[%d]", level++);
     WRITE_VALUE(eris_savestackidx(thread, uv->v) + 1, size_t);
     eris_setobj(info->L, info->L->top - 1, uv->v);          /* ... thread obj */
     lua_pushlightuserdata(info->L, uv);                  /* ... thread obj id */
