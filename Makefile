@@ -10,7 +10,7 @@ PLAT= none
 # so take care if INSTALL_TOP is not an absolute path. See the local target.
 # You may want to make INSTALL_LMOD and INSTALL_CMOD consistent with
 # LUA_ROOT, LUA_LDIR, and LUA_CDIR in luaconf.h.
-INSTALL_TOP= /usr/local
+INSTALL_TOP= $(DESTDIR)/usr/local
 INSTALL_BIN= $(INSTALL_TOP)/bin
 INSTALL_INC= $(INSTALL_TOP)/include
 INSTALL_LIB= $(INSTALL_TOP)/lib
@@ -63,13 +63,11 @@ install: dummy
 	cd src && $(INSTALL_EXEC) $(TO_BIN) $(INSTALL_BIN)
 	cd src && $(INSTALL_DATA) $(TO_INC) $(INSTALL_INC)
 	cd src && $(INSTALL_DATA) $(TO_LIB) $(INSTALL_LIB)
-	cd doc && $(INSTALL_DATA) $(TO_MAN) $(INSTALL_MAN)
 
 uninstall:
 	cd src && cd $(INSTALL_BIN) && $(RM) $(TO_BIN)
 	cd src && cd $(INSTALL_INC) && $(RM) $(TO_INC)
 	cd src && cd $(INSTALL_LIB) && $(RM) $(TO_LIB)
-	cd doc && cd $(INSTALL_MAN) && $(RM) $(TO_MAN)
 
 local:
 	$(MAKE) install INSTALL_TOP=../install
