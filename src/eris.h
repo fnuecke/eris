@@ -1,5 +1,5 @@
 /*
-Eris - Heavy-duty persistence for Lua 5.2.2 - Based on Pluto
+Eris - Heavy-duty persistence for Lua 5.2.3 - Based on Pluto
 Copyright (c) 2013 by Florian Nuecke.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,6 +25,11 @@ THE SOFTWARE.
 
 #ifndef ERIS_H
 #define ERIS_H
+
+#define ERIS_VERSION_MAJOR  "1"
+#define ERIS_VERSION_MINOR  "0"
+#define ERIS_VERSION_NUM    100
+#define ERIS_VERSION_RELEASE  "0"
 
 /*
 ** ==================================================================
