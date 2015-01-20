@@ -1,5 +1,5 @@
 Eris
-Copyright (c) 2013 Florian Nücke.
+Copyright (c) 2013-2015 Florian Nücke.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@ THE SOFTWARE.
 
 -----------------------------------------------------------------------------
 
-Lua 5.2.2 from http://www.lua.org/ with patches http://www.lua.org/bugs.html
+Lua 5.2.3 from http://www.lua.org/ with patches http://www.lua.org/bugs.html
 slightly modified to access internal library functions for persistence.
 
 Copyright © 1994–2013 Lua.org, PUC-Rio.
