@@ -17,7 +17,7 @@ static int LUAF_boxinteger(lua_State *L)
 					/* num */
 	int* ptr = lua_newuserdata(L, sizeof(int));
 					/* num udata */
-	*ptr = luaL_checkint(L, 1);
+	*ptr = luaL_checkinteger(L, 1);
 	lua_newtable(L);
 					/* num udata mt */
 	lua_pushstring(L, "__persist");

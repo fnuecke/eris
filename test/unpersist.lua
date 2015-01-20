@@ -30,6 +30,7 @@ function test(rootobj)
   dotest("Boolean TRUE           ", rootobj.testtrue == true)
   dotest("Light userdata         ", checkludata(rootobj.testludata))
   dotest("Number 7               ", rootobj.testseven == 7)
+  dotest("Integer -1             ", rootobj.testint == ((0xFFFFFFFF ~= -1) and (0xFFFFFFFF00000000 | 0x00000000FFFFFFFF) or (0xFFFF0000 | 0x0000FFFF)))
   dotest("String 'foobar'        ", rootobj.testfoobar == "foobar")
   dotest("Table                  ", rootobj.testtbl.a == 2 and rootobj.testtbl[2] == 4)
   dotest("NaN value              ", rootobj.testnan[1] ~= rootobj.testnan[1])
@@ -88,6 +89,7 @@ infile:close()
 
 -------------------------------------------------------------------------------
 
+eris.settings("path", true)
 uperms = {
   _ENV = _ENV,
   [1] = coroutine.yield,

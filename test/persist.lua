@@ -12,80 +12,91 @@ end
 
 -------------------------------------------------------------------------------
 -- Permanent values.
-
+-- [[
 local permtable = { 1234 }
 
 rootobj.testperm = permtable
+--]]
 
 -------------------------------------------------------------------------------
 -- Basic value types.
-
+-- [[
 rootobj.testnil = nil
 rootobj.testfalse = false
 rootobj.testtrue = true
 rootobj.testludata = createludata()
 rootobj.testseven = 7
+rootobj.testint = (0xFFFFFFFF ~= -1) and (0xFFFFFFFF00000000 | 0x00000000FFFFFFFF) or (0xFFFF0000 | 0x0000FFFF)
 rootobj.testfoobar = "foobar"
+--]]
 
 -------------------------------------------------------------------------------
 -- Tables.
-
+-- [[
 local testtbl = { a = 2, [2] = 4 }
 
 rootobj.testtbl = testtbl
+--]]
 
 -------------------------------------------------------------------------------
 -- NaNs in tables (checks that this doesn't break the internal ref table).
-
+-- [[
 local nantable = {}
 nantable[1] = 0/0
 
 rootobj.testnan = nantable
+--]]
 
 -------------------------------------------------------------------------------
 -- Cycles in tables.
-
+-- [[
 local testloopa = {}
 local testloopb = { testloopa = testloopa }
 testloopa.testloopb = testloopb
 
 rootobj.testlooptable = testloopa
+--]]
 
 -------------------------------------------------------------------------------
 -- Metatables.
-
+-- [[
 local twithmt = {}
 setmetatable( twithmt, { __call = function() return 21 end } )
 
 rootobj.testmt = twithmt
+--]]
 
 -------------------------------------------------------------------------------
 -- Yet more metatables.
-
+-- [[
 local niinmt = { a = 3 }
 setmetatable(niinmt, {__newindex = function(key, val) end })
 
 rootobj.testniinmt = niinmt
+--]]
 
 -------------------------------------------------------------------------------
 -- Literal userdata.
-
+-- [[
 local literaludata = boxinteger(71)
 
 rootobj.testliteraludata = literaludata
+--]]
 
 -------------------------------------------------------------------------------
 -- Functions (closures without upvalues).
-
+-- [[
 local function func()
   return 4
 end
 
 rootobj.testfuncreturnsfour = func
+--]]
 
 -------------------------------------------------------------------------------
 -- Environment. This is really redundant in 5.2 since envs are just upvalues,
 -- but it may still be considered somewhat special.
+-- [[
 local testfenv = (function()
   local _ENV = { abc = 456 }
   return function()
@@ -94,10 +105,11 @@ local testfenv = (function()
 end)()
 
 rootobj.testfenv = testfenv
+--]]
 
 -------------------------------------------------------------------------------
 -- Closures.
-
+-- [[
 local function funcreturningclosure(n)
   return function()
     return n
@@ -106,19 +118,21 @@ end
 
 rootobj.testclosure = funcreturningclosure(11)
 rootobj.testnilclosure = funcreturningclosure(nil)
+--]]
 
 -------------------------------------------------------------------------------
 -- More closures.
-
+-- [[
 local function nestedfunc(n)
   return (function(m) return m+2 end)(n+3)
 end
 
 rootobj.testnest = nestedfunc
+--]]
 
 -------------------------------------------------------------------------------
 -- Cycles in upvalues.
-
+-- [[
 local function GenerateObjects()
   local Table = {}
 
@@ -134,10 +148,11 @@ end
 GenerateObjects()
 
 rootobj.testuvcycle = uvcycle
+--]]
 
 -------------------------------------------------------------------------------
 -- Special callback for persisting tables.
-
+-- [[
 local sptable = { a = 3 }
 
 setmetatable(sptable, { 
@@ -150,26 +165,29 @@ setmetatable(sptable, {
 })
 
 rootobj.testsptable = sptable
+--]]
 
 -------------------------------------------------------------------------------
 -- Special callbacks for persisting userdata.
-
+-- [[
 rootobj.testspudata1 = boxboolean(true)
 rootobj.testspudata2 = boxboolean(false)
+--]]
 
 -------------------------------------------------------------------------------
 -- Reference correctness.
-
+-- [[
 local sharedref = {}
 refa = {sharedref = sharedref}
 refb = {sharedref = sharedref}
 
 rootobj.testsharedrefa = refa
 rootobj.testsharedrefb = refb
+--]]
 
 -------------------------------------------------------------------------------
 -- Shared upvalues (like reference correctness for upvalues).
-
+-- [[
 local function makecounter()
   local a = 0
   return {
@@ -179,20 +197,22 @@ local function makecounter()
 end
 
 rootobj.testsharedupval = makecounter()
+--]]
 
 -------------------------------------------------------------------------------
 -- Debug info.
-
+-- [[
 local function debuginfo(foo)
   foo = foo + foo
   return debug.getlocal(1,1)
 end
 
 rootobj.testdebuginfo = debuginfo
+--]]
 
 -------------------------------------------------------------------------------
 -- Suspended thread.
-
+-- [[
 local function fc(i)
   local ic = i + 1
   coroutine.yield()
@@ -214,23 +234,26 @@ local thr = coroutine.create(fa)
 coroutine.resume(thr, 2)
 
 rootobj.testthread = thr
+--]]
 
 -------------------------------------------------------------------------------
 -- Not yet started thread.
-
+-- [[
 rootobj.testnthread = coroutine.create(function() return func() end)
+--]]
 
 -------------------------------------------------------------------------------
 -- Dead thread.
-
+-- [[
 local deadthr = coroutine.create(function() return func() end)
 coroutine.resume(deadthr)
 
 rootobj.testdthread = deadthr
+--]]
 
 -------------------------------------------------------------------------------
 -- Open upvalues (stored in thread stack).
-
+-- [[
 local function uvinthreadfunc()
   local a = 1
   local b = function()
@@ -248,10 +271,11 @@ local uvinthread = coroutine.create(uvinthreadfunc)
 coroutine.resume(uvinthread)
 
 rootobj.testuvinthread = uvinthread
+--]]
 
 -------------------------------------------------------------------------------
 -- Yield across pcall.
-
+-- [[
 local function protf(arg)
   coroutine.yield()
   error(arg, 0)
@@ -265,10 +289,11 @@ local protthr = coroutine.create(protthreadfunc)
 coroutine.resume(protthr)
 
 rootobj.testprotthr = protthr
+--]]
 
 -------------------------------------------------------------------------------
 -- Yield across xpcall with message handler.
-
+-- [[
 local function xprotthreadfunc()
   local function handler(msg)
     return "handler:" .. msg
@@ -281,10 +306,11 @@ local xprotthr = coroutine.create(xprotthreadfunc)
 coroutine.resume(xprotthr)
 
 rootobj.testxprotthr = xprotthr
+--]]
 
 -------------------------------------------------------------------------------
 -- Yield out of metafunction.
-
+-- [[
 local function ymtf(arg)
   coroutine.yield()
   return true
@@ -298,36 +324,11 @@ local ymtthr = coroutine.create(ymtthreadfunc)
 coroutine.resume(ymtthr)
 
 rootobj.testymtthr = ymtthr
-
--------------------------------------------------------------------------------
-
--- I considered supporting the hook callback from the debug library, but then
--- Eris would also have to persist the registry table the debug library uses,
--- and things go quickly out of hand that way, so I decided against that.
---[[
-function hookthrfunc()
-  local hookRan = false
-  local function callback()
-    print("hook!")
-    hookRan = true
-  end
-  debug.sethook(callback, "", 100000)
-  coroutine.yield("yielded")
-  for i = 1, 10000000 do
-    if hookRan then break end
-  end
-  return hookRan
-end
-
-hookthr = coroutine.create(hookthrfunc)
-print(coroutine.resume(hookthr))
-
-rootobj.testhookthr = hookthr
-]]
+--]]
 
 -------------------------------------------------------------------------------
 -- Deep callstacks (100 levels).
-
+-- [[
 local function deepfunc(x)
   x = x or 0
   if x == 100 then
@@ -342,10 +343,11 @@ local deepcall = coroutine.wrap(deepfunc)
 deepcall()
 
 rootobj.testdeep = deepcall
+--]]
 
 -------------------------------------------------------------------------------
 -- Tail calls.
-
+-- [[
 local function tailfunc()
   local function tailer(x)
     x = x or 0
@@ -372,12 +374,37 @@ local tailcall = wrap(tailfunc)
 tailcall()
 
 rootobj.testtail = tailcall
+--]]
+
+-------------------------------------------------------------------------------
+-- I considered supporting the hook callback from the debug library, but then
+-- Eris would also have to persist the registry table the debug library uses,
+-- and things go quickly out of hand that way, so I decided against that.
+--[[
+function hookthrfunc()
+  local hookRan = false
+  local function callback()
+    print("hook!")
+    hookRan = true
+  end
+  debug.sethook(callback, "", 100000)
+  coroutine.yield("yielded")
+  for i = 1, 10000000 do
+    if hookRan then break end
+  end
+  return hookRan
+end
+
+hookthr = coroutine.create(hookthrfunc)
+print(coroutine.resume(hookthr))
+
+rootobj.testhookthr = hookthr
+--]]
 
 -------------------------------------------------------------------------------
 -- From the Lua test cases, as a more complex piece of code. Since this is
 -- easier to verify visually it spams the output quite a bit, so it's disabled
 -- per default.
-
 --[[
 local lifethr = coroutine.create(function()
   local _ENV = { write = coroutine.yield }
@@ -491,6 +518,8 @@ rootobj.testlife = lifethr
 --]]
 -------------------------------------------------------------------------------
 -- Do actual persisting with some perms.
+
+eris.settings("path", true)
 
 perms = {
   [_ENV] = "_ENV",
