@@ -453,12 +453,13 @@ set_setting(lua_State *L, void *key) {                           /* ... value */
 }
 
 /* Used as a callback for luaL_opt to check boolean setting values. */
-static void
+static bool
 checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
   if (!lua_isboolean(L, narg)) {                                /* ... :( ... */
-    luaL_argerror(L, narg, lua_pushfstring(L,
+    return luaL_argerror(L, narg, lua_pushfstring(L,
       "boolean expected, got %s", lua_typename(L, lua_type(L, narg))));
   }                                                           /* ... bool ... */
+  return lua_toboolean(L, narg);
 }
 
 /* }======================================================================== */
