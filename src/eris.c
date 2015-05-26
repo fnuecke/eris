@@ -243,7 +243,7 @@ extern void eris_permstrlib(lua_State *L, bool forUnpersist);
 
 /* Used for internal consistency checks, for debugging. These are true asserts
  * in the sense that they should never fire, even for bad inputs. */
-#if 1
+#if 0
 #define eris_assert(c) assert(c)
 #define eris_ifassert(e) e
 #else
