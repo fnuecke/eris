@@ -1,6 +1,6 @@
 /*
-Eris - Heavy-duty persistence for Lua 5.2.3 - Based on Pluto
-Copyright (c) 2013 by Florian Nuecke.
+Eris - Heavy-duty persistence for Lua 5.2.4 - Based on Pluto
+Copyright (c) 2013-2015 by Florian Nuecke.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -455,12 +455,13 @@ set_setting(lua_State *L, void *key) {                           /* ... value */
 }
 
 /* Used as a callback for luaL_opt to check boolean setting values. */
-static void
+static bool
 checkboolean(lua_State *L, int narg) {                       /* ... bool? ... */
   if (!lua_isboolean(L, narg)) {                                /* ... :( ... */
-    luaL_argerror(L, narg, lua_pushfstring(L,
+    return luaL_argerror(L, narg, lua_pushfstring(L,
       "boolean expected, got %s", lua_typename(L, lua_type(L, narg))));
   }                                                           /* ... bool ... */
+  return lua_toboolean(L, narg);
 }
 
 /* }======================================================================== */
@@ -2748,6 +2749,8 @@ eris_undump(lua_State *L, lua_Reader reader, void *ud) {            /* perms? */
 
 LUA_API void
 eris_persist(lua_State *L, int perms, int value) {                    /* ...? */
+  perms = lua_absindex(L, perms);
+  value = lua_absindex(L, value);
   eris_checkstack(L, 3);
   lua_pushcfunction(L, l_persist);                           /* ... l_persist */
   lua_pushvalue(L, perms);                             /* ... l_persist perms */
@@ -2757,6 +2760,8 @@ eris_persist(lua_State *L, int perms, int value) {                    /* ...? */
 
 LUA_API void
 eris_unpersist(lua_State *L, int perms, int value) {                   /* ... */
+  perms = lua_absindex(L, perms);
+  value = lua_absindex(L, value);
   eris_checkstack(L, 3);
   lua_pushcfunction(L, l_unpersist);                       /* ... l_unpersist */
   lua_pushvalue(L, perms);                           /* ... l_unpersist perms */
@@ -2774,6 +2779,7 @@ eris_get_setting(lua_State *L, const char *name) {                     /* ... */
 
 LUA_API void
 eris_set_setting(lua_State *L, const char *name, int value) {          /* ... */
+  value = lua_absindex(L, value);
   eris_checkstack(L, 3);
   lua_pushcfunction(L, l_settings);                         /* ... l_settings */
   lua_pushstring(L, name);                             /* ... l_settings name */
