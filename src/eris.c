@@ -1,5 +1,5 @@
 /*
-Eris - Heavy-duty persistence for Lua 5.2.4 - Based on Pluto
+Eris - Heavy-duty persistence for Lua 5.3.0 - Based on Pluto
 Copyright (c) 2013-2015 by Florian Nuecke.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -243,7 +243,7 @@ extern void eris_permstrlib(lua_State *L, bool forUnpersist);
 
 /* Used for internal consistency checks, for debugging. These are true asserts
  * in the sense that they should never fire, even for bad inputs. */
-#if 0
+#if 1
 #define eris_assert(c) assert(c)
 #define eris_ifassert(e) e
 #else
@@ -1573,7 +1573,6 @@ u_closure(Info *info) {                                                /* ... */
     /* Create closure and anchor it on the stack (avoid collection via GC). */
     cl = eris_newLclosure(info->L, nups);
     eris_setclLvalue(info->L, info->L->top, cl);                   /* ... lcl */
-    eris_initupvals(info->L, cl); /* Init to all closed, fill in later. */
     eris_incr_top(info->L);
 
     /* Preregister closure for handling of cycles (upvalues). */
@@ -1598,7 +1597,8 @@ u_closure(Info *info) {                                                /* ... */
       cl->p = p;
     }
     lua_pop(info->L, 2);                                           /* ... lcl */
-    eris_assert(cl->p->sizeupvalues == nups);
+    eris_assert(cl->nupvalues == cl->p->sizeupvalues);
+    eris_initupvals(info->L, cl); /* Init to all closed, fill in later. */
     poppath(info);
 
     /* Unpersist all upvalues. */
@@ -1623,19 +1623,14 @@ u_closure(Info *info) {                                                /* ... */
         lua_rawseti(info->L, -2, UVTONU);                      /* ... lcl tbl */
       }
       else {                                              /* ... lcl tbl olcl */
-        LClosure *ocl;
         int onup;
         eris_assert(lua_type(info->L, -1) == LUA_TFUNCTION);
-        ocl = eris_clLvalue(info->L->top - 1);
-        lua_pop(info->L, 1);                                   /* ... lcl tbl */
-        lua_rawgeti(info->L, -1, UVTONU);                 /* ... lcl tbl onup */
+        lua_rawgeti(info->L, -2, UVTONU);            /* ... lcl tbl olcl onup */
         eris_assert(lua_type(info->L, -1) == LUA_TNUMBER);
         onup = lua_tointeger(info->L, -1);
+        lua_pop(info->L, 1);                              /* ... lcl tbl olcl */
+        lua_upvaluejoin(info->L, -3, nup, -1, onup);
         lua_pop(info->L, 1);                                   /* ... lcl tbl */
-        (*uv)->refcount--;
-        *uv = ocl->upvals[onup - 1];
-        ocl->upvals[onup - 1]->refcount++;
-        /* TODO Will this "leak" the empty upvalue? Needs testing. */
       }
 
       /* Set the upvalue's actual value and add our reference to the upvalue to
@@ -2467,7 +2462,7 @@ unchecked_persist(lua_State *L, lua_Writer writer, void *ud) {
 
   if (get_setting(L, (void*)&kSettingMaxComplexity)) {
                                                   /* perms buff rootobj value */
-    info.maxComplexity = lua_tounsigned(L, -1);
+    info.maxComplexity = lua_tointeger(L, -1);
     lua_pop(L, 1);                                      /* perms buff rootobj */
   }
   if (get_setting(L, (void*)&kSettingGeneratePath)) {
@@ -2527,7 +2522,7 @@ unchecked_unpersist(lua_State *L, lua_Reader reader, void *ud) {/* perms str? */
 
   if (get_setting(L, (void*)&kSettingMaxComplexity)) {
                                                   /* perms buff rootobj value */
-    info.maxComplexity = lua_tounsigned(L, -1);
+    info.maxComplexity = lua_tointeger(L, -1);
     lua_pop(L, 1);                                      /* perms buff rootobj */
   }
   if (get_setting(L, (void*)&kSettingGeneratePath)) {
@@ -2661,7 +2656,7 @@ l_settings(lua_State *L) {                                /* name value? ...? */
     }
     else if (IS(kSettingMaxComplexity)) {
       if (!get_setting(L, (void*)&kSettingMaxComplexity)) {
-        lua_pushunsigned(L, kMaxComplexity);
+        lua_pushinteger(L, kMaxComplexity);
       }
     }
     else {
@@ -2689,7 +2684,7 @@ l_settings(lua_State *L) {                                /* name value? ...? */
       set_setting(L, (void*)&kSettingGeneratePath);
     }
     else if (IS(kSettingMaxComplexity)) {
-      luaL_optunsigned(L, 2, 0);
+      luaL_optinteger(L, 2, 0);
       set_setting(L, (void*)&kSettingMaxComplexity);
     }
     else {
