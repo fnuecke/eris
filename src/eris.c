@@ -104,7 +104,7 @@ static const lua_Unsigned kMaxComplexity = 10000;
  * patched Lua version to be able to persist some of the library functions,
  * anyway: it needs to put the continuation C functions in the perms table. */
 /* ldebug.h */
-#define eris_ci_func ci_func
+#define eris_ci_func(ci)		(clLvalue((ci)->func))
 /* ldo.h */
 #define eris_incr_top incr_top
 #define eris_savestack savestack
