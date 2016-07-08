@@ -151,11 +151,11 @@ static const lua_Unsigned kMaxComplexity = 10000;
 
 /* Functions in Lua libraries used to access C functions we need to add to the
  * permanents table to fully support yielded coroutines. */
-extern void eris_permbaselib(lua_State *L, bool forUnpersist);
-extern void eris_permcorolib(lua_State *L, bool forUnpersist);
-extern void eris_permloadlib(lua_State *L, bool forUnpersist);
-extern void eris_permiolib(lua_State *L, bool forUnpersist);
-extern void eris_permstrlib(lua_State *L, bool forUnpersist);
+extern void eris_permbaselib(lua_State *L, int forUnpersist);
+extern void eris_permcorolib(lua_State *L, int forUnpersist);
+extern void eris_permloadlib(lua_State *L, int forUnpersist);
+extern void eris_permiolib(lua_State *L, int forUnpersist);
+extern void eris_permstrlib(lua_State *L, int forUnpersist);
 
 /* Utility macro for populating the perms table with internal C functions. */
 #define populateperms(L, forUnpersist) {\
