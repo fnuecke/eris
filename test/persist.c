@@ -15,7 +15,7 @@ static int LUAF_createludata(lua_State *L)
 static int LUAF_boxinteger(lua_State *L)
 {
 					/* num */
-	int* ptr = lua_newuserdata(L, sizeof(int));
+	int* ptr = (int*)lua_newuserdata(L, sizeof(int));
 					/* num udata */
 	*ptr = luaL_checkinteger(L, 1);
 	lua_newtable(L);
@@ -34,7 +34,7 @@ static int LUAF_boxinteger(lua_State *L)
 static int LUAF_boxboolean(lua_State *L)
 {
 					/* bool */
-	char* ptr = lua_newuserdata(L, sizeof(char));
+	char* ptr = (char*)lua_newuserdata(L, sizeof(char));
 					/* bool udata */
 	*ptr = (char)lua_toboolean(L, 1);
 	lua_newtable(L);

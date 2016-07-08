@@ -29,9 +29,11 @@ THE SOFTWARE.
 #include <string.h>
 
 /* Not using stdbool because Visual Studio lives in the past... */
+#ifndef __cplusplus
 typedef int bool;
 #define false 0
 #define true 1
+#endif
 
 /* Mark us as part of the Lua core to get access to what we need. */
 #define LUA_CORE
@@ -893,7 +895,7 @@ u_string(Info *info) {                                                 /* ... */
   {
     /* TODO Can we avoid this copy somehow? (Without it getting too nasty) */
     const size_t length = READ_VALUE(size_t);
-    char *value = lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
+    char *value = (char*) lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
     READ_RAW(value, length);
     lua_pushlstring(info->L, value, length);                   /* ... tmp str */
     lua_replace(info->L, -2);                                      /* ... str */
@@ -1076,7 +1078,7 @@ p_special(Info *info, Callback literal) {                          /* ... obj */
         lua_pushvalue(info->L, -2);                       /* ... obj func obj */
 
         if (info->passIOToPersist) {
-          lua_pushlightuserdata(info->L, info->u.pi.writer);
+          lua_pushlightuserdata(info->L, (void*)info->u.pi.writer);
                                                    /* ... obj func obj writer */
           lua_pushlightuserdata(info->L, info->u.pi.ud);
                                                 /* ... obj func obj writer ud */
@@ -1196,7 +1198,7 @@ u_userdata(Info *info) {                                               /* ... */
 static void
 p_proto(Info *info) {                                            /* ... proto */
   int i;
-  const Proto *p = lua_touserdata(info->L, -1);
+  const Proto *p = (Proto*)lua_touserdata(info->L, -1);
   eris_checkstack(info->L, 3);
 
   /* Write general information. */
@@ -1286,7 +1288,7 @@ p_proto(Info *info) {                                            /* ... proto */
 static void
 u_proto(Info *info) {                                            /* ... proto */
   int i, n;
-  Proto *p = lua_touserdata(info->L, -1);
+  Proto *p = (Proto*)lua_touserdata(info->L, -1);
   eris_assert(p);
 
   eris_checkstack(info->L, 2);
@@ -1334,9 +1336,9 @@ u_proto(Info *info) {                                            /* ... proto */
     Proto *cp;
     pushpath(info, "[%d]", i);
     p->p[i] = eris_newproto(info->L);
-    lua_pushlightuserdata(info->L, p->p[i]);              /* ... proto nproto */
+    lua_pushlightuserdata(info->L, (void*)p->p[i]);              /* ... proto nproto */
     unpersist(info);                        /* ... proto nproto nproto/oproto */
-    cp = lua_touserdata(info->L, -1);
+    cp = (Proto*)lua_touserdata(info->L, -1);
     if (cp != p->p[i]) {                           /* ... proto nproto oproto */
       /* Just overwrite it, GC will clean this up. */
       p->p[i] = cp;
@@ -1591,7 +1593,7 @@ u_closure(Info *info) {                                                /* ... */
     /* The proto we have now may differ, if we already unpersisted it before.
      * In that case we now have a reference to the originally unpersisted
      * proto so we'll use that. */
-    p = lua_touserdata(info->L, -1);
+    p = (Proto*) lua_touserdata(info->L, -1);
     if (p != cl->p) {                              /* ... lcl nproto oproto */
       /* Just overwrite the old one, GC will clean this up. */
       cl->p = p;
