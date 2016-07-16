@@ -795,10 +795,10 @@ read_lua_Number(Info *info) {
 static lua_Integer
 read_lua_Integer(Info *info) {
   if (sizeof(lua_Integer) == sizeof(uint32_t)) {
-    return (lua_Integer) read_uint32_t(info);
+    return (lua_Integer)read_uint32_t(info);
   }
   else if (sizeof(lua_Integer) == sizeof(uint64_t)) {
-    return (lua_Integer) read_uint64_t(info);
+    return (lua_Integer)read_uint64_t(info);
   }
   else {
     eris_error(info, ERIS_ERR_TYPE_INT);
@@ -895,7 +895,7 @@ u_string(Info *info) {                                                 /* ... */
   {
     /* TODO Can we avoid this copy somehow? (Without it getting too nasty) */
     const size_t length = READ_VALUE(size_t);
-    char *value = (char*) lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
+    char *value = (char*)lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
     READ_RAW(value, length);
     lua_pushlstring(info->L, value, length);                   /* ... tmp str */
     lua_replace(info->L, -2);                                      /* ... str */
@@ -1593,7 +1593,7 @@ u_closure(Info *info) {                                                /* ... */
     /* The proto we have now may differ, if we already unpersisted it before.
      * In that case we now have a reference to the originally unpersisted
      * proto so we'll use that. */
-    p = (Proto*) lua_touserdata(info->L, -1);
+    p = (Proto*)lua_touserdata(info->L, -1);
     if (p != cl->p) {                              /* ... lcl nproto oproto */
       /* Just overwrite the old one, GC will clean this up. */
       cl->p = p;
@@ -1804,7 +1804,7 @@ p_thread(Info *info) {                                          /* ... thread */
           /* NOTE Ugly hack. We have to push the continuation function as a C
            * function to properly track it in our ref table. It's never called,
            * so we can get away with this. */
-          lua_pushcfunction(info->L, (lua_CFunction) ci->u.c.k);
+          lua_pushcfunction(info->L, (lua_CFunction)ci->u.c.k);
                                                              /* ... thread func */
           persist(info);                                 /* ... thread func/nil */
           lua_pop(info->L, 1);                                    /* ... thread */
@@ -1982,7 +1982,7 @@ u_thread(Info *info) {                                                 /* ... */
           UNLOCK(thread);
           if (lua_iscfunction(info->L, -1)) {                /* ... thread func */
             /* NOTE Ugly hack. See p_thread. */
-            thread->ci->u.c.k = (lua_KFunction) lua_tocfunction(info->L, -1);
+            thread->ci->u.c.k = (lua_KFunction)lua_tocfunction(info->L, -1);
           }
           else {
             eris_error(info, ERIS_ERR_THREADCTX);
