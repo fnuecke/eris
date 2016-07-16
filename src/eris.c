@@ -854,7 +854,7 @@ u_string(Info *info) {                                                 /* ... */
   {
     /* TODO Can we avoid this copy somehow? (Without it getting too nasty) */
     const size_t length = READ_VALUE(size_t);
-    char *value = (char*) lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
+    char *value = (char*)lua_newuserdata(info->L, length * sizeof(char)); /* ... tmp */
     READ_RAW(value, length);
     lua_pushlstring(info->L, value, length);                   /* ... tmp str */
     lua_replace(info->L, -2);                                      /* ... str */
@@ -1552,7 +1552,7 @@ u_closure(Info *info) {                                                /* ... */
     /* The proto we have now may differ, if we already unpersisted it before.
      * In that case we now have a reference to the originally unpersisted
      * proto so we'll use that. */
-    p = (Proto*) lua_touserdata(info->L, -1);
+    p = (Proto*)lua_touserdata(info->L, -1);
     if (p != cl->l.p) {                              /* ... lcl nproto oproto */
       /* Just overwrite the old one, GC will clean this up. */
       cl->l.p = p;
