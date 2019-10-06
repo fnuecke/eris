@@ -1804,7 +1804,7 @@ p_thread(Info *info) {                                          /* ... thread */
           /* NOTE Ugly hack. We have to push the continuation function as a C
            * function to properly track it in our ref table. It's never called,
            * so we can get away with this. */
-          lua_pushcfunction(info->L, (lua_CFunction)ci->u.c.k);
+          lua_pushcfunction(info->L, (lua_CFunction)(void (*) (void))ci->u.c.k);
                                                              /* ... thread func */
           persist(info);                                 /* ... thread func/nil */
           lua_pop(info->L, 1);                                    /* ... thread */
@@ -1982,7 +1982,8 @@ u_thread(Info *info) {                                                 /* ... */
           UNLOCK(thread);
           if (lua_iscfunction(info->L, -1)) {                /* ... thread func */
             /* NOTE Ugly hack. See p_thread. */
-            thread->ci->u.c.k = (lua_KFunction)lua_tocfunction(info->L, -1);
+            thread->ci->u.c.k =
+              (lua_KFunction)(void (*) (void))lua_tocfunction(info->L, -1);
           }
           else {
             eris_error(info, ERIS_ERR_THREADCTX);

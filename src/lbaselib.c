@@ -506,10 +506,10 @@ void eris_permbaselib(lua_State *L, int forUnpersist) {
    * in the ref table, and it is never ever called, so we get away with it. */
   if (forUnpersist) {
     lua_pushstring(L, "__eris.baselib_finishpcall");
-    lua_pushcfunction(L, (lua_CFunction)finishpcall);
+    lua_pushcfunction(L, (lua_CFunction)(void (*) (void))finishpcall);
   }
   else {
-    lua_pushcfunction(L, (lua_CFunction)finishpcall);
+    lua_pushcfunction(L, (lua_CFunction)(void (*) (void))finishpcall);
     lua_pushstring(L, "__eris.baselib_finishpcall");
   }
   lua_rawset(L, -3);
