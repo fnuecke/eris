@@ -1589,14 +1589,14 @@ u_closure(Info *info) {                                                /* ... */
     pushpath(info, ".proto");
     cl->p = eris_newproto(info->L);
     /* Push the proto into which to unpersist as a parameter to u_proto. */
-    lua_pushlightuserdata(info->L, cl->p);                /* ... lcl nproto */
+    lua_pushlightuserdata(info->L, cl->p);                  /* ... lcl nproto */
     unpersist(info);                          /* ... lcl nproto nproto/oproto */
     eris_assert(lua_type(info->L, -1) == LUA_TLIGHTUSERDATA);
     /* The proto we have now may differ, if we already unpersisted it before.
      * In that case we now have a reference to the originally unpersisted
      * proto so we'll use that. */
     p = (Proto*)lua_touserdata(info->L, -1);
-    if (p != cl->p) {                              /* ... lcl nproto oproto */
+    if (p != cl->p) {                                /* ... lcl nproto oproto */
       /* Just overwrite the old one, GC will clean this up. */
       cl->p = p;
     }
