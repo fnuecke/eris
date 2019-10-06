@@ -1336,7 +1336,7 @@ u_proto(Info *info) {                                            /* ... proto */
     Proto *cp;
     pushpath(info, "[%d]", i);
     p->p[i] = eris_newproto(info->L);
-    lua_pushlightuserdata(info->L, (void*)p->p[i]);              /* ... proto nproto */
+    lua_pushlightuserdata(info->L, (void*)p->p[i]);       /* ... proto nproto */
     unpersist(info);                        /* ... proto nproto nproto/oproto */
     cp = (Proto*)lua_touserdata(info->L, -1);
     if (cp != p->p[i]) {                           /* ... proto nproto oproto */
