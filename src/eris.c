@@ -1871,6 +1871,7 @@ u_thread(Info *info) {                                                 /* ... */
   lua_State* thread;
   size_t level;
   StkId stack, o;
+  uint8_t hasContinuation;
 
   eris_checkstack(info->L, 3);
 
@@ -1977,7 +1978,9 @@ u_thread(Info *info) {                                                 /* ... */
         thread->ci->u.c.old_errfunc = READ_VALUE(ptrdiff_t); */
         thread->ci->u.c.old_errfunc = 0;
 
-        if (thread->status == LUA_YIELD && READ_VALUE(uint8_t)) {
+        /* Always read this flag because it's always written. */
+        hasContinuation = READ_VALUE(uint8_t);
+        if (thread->status == LUA_YIELD && hasContinuation) {
           thread->ci->u.c.ctx = READ_VALUE(int);
           LOCK(thread);
           unpersist(info);                                  /* ... thread func? */
