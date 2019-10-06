@@ -276,7 +276,12 @@ static void hookf (lua_State *L, lua_Debug *ar) {
       lua_pushinteger(L, ar->currentline);
     else lua_pushnil(L);
     lua_assert(lua_getinfo(L, "lS", ar));
-    lua_call(L, 2, 0);
+    int yield =
+      (ar->event == LUA_HOOKLINE || ar->event == LUA_HOOKCOUNT)
+      && (lua_gethookmask(L) & LUA_MASKYIELD) ? 1 : 0;
+    lua_call(L, 2, yield);  /* call hook function */
+    if (yield && lua_toboolean(L, -1))
+      lua_yield(L, 0);
   }
 }
 
@@ -286,6 +291,7 @@ static int makemask (const char *smask, int count) {
   if (strchr(smask, 'c')) mask |= LUA_MASKCALL;
   if (strchr(smask, 'r')) mask |= LUA_MASKRET;
   if (strchr(smask, 'l')) mask |= LUA_MASKLINE;
+  if (strchr(smask, 'y')) mask |= LUA_MASKYIELD;
   if (count > 0) mask |= LUA_MASKCOUNT;
   return mask;
 }
@@ -296,6 +302,7 @@ static char *unmakemask (int mask, char *smask) {
   if (mask & LUA_MASKCALL) smask[i++] = 'c';
   if (mask & LUA_MASKRET) smask[i++] = 'r';
   if (mask & LUA_MASKLINE) smask[i++] = 'l';
+  if (mask & LUA_MASKYIELD) smask[i++] = 'y';
   smask[i] = '\0';
   return smask;
 }

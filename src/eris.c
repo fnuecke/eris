@@ -185,7 +185,6 @@ extern void eris_permstrlib(lua_State *L, int forUnpersist);
 
 #define ERIS_ERR_CFUNC "attempt to persist a light C function (%p)"
 #define ERIS_ERR_COMPLEXITY "object too complex"
-#define ERIS_ERR_HOOK "cannot persist yielded hooks"
 #define ERIS_ERR_METATABLE "bad metatable, not nil or table"
 #define ERIS_ERR_NOFUNC "attempt to persist unknown function type"
 #define ERIS_ERR_READ "could not read data"
@@ -1748,12 +1747,18 @@ p_thread(Info *info) {                                          /* ... thread */
     }
 
     eris_assert(eris_isLua(ci) || (ci->callstatus & CIST_TAIL) == 0);
-    if (ci->callstatus & CIST_HOOKYIELD) {
-      eris_error(info, ERIS_ERR_HOOK);
-    }
 
     if (eris_isLua(ci)) {
-      const LClosure *lcl = eris_ci_func(ci);
+      StkId func = ci->func;
+      if (ci->callstatus & CIST_HOOKYIELD) {
+        /* Yielded from hook, mimic what resume does. */
+        ci->func = restorestack(thread, ci->extra);
+        /* Also, store ci->func for unpersisting,
+         * as ci->extra won't be restored yet. */
+        WRITE_VALUE(eris_savestackidx(thread, ci->func), size_t);
+      }
+      const LClosure *lcl = eris_ci_func(ci); /* Uses ci->func */
+      ci->func = func;
       WRITE_VALUE(eris_savestackidx(thread, ci->u.l.base), size_t);
       WRITE_VALUE(ci->u.l.savedpc - lcl->p->code, size_t);
     }
@@ -1918,7 +1923,13 @@ u_thread(Info *info) {                                                 /* ... */
     }
 
     if (eris_isLua(thread->ci)) {
-      LClosure *lcl = eris_ci_func(thread->ci);
+      StkId func = thread->ci->func;
+      if (thread->ci->callstatus & CIST_HOOKYIELD) {
+        /* See corresponding persist code */
+        thread->ci->func = eris_restorestackidx(thread, READ_VALUE(size_t));
+      }
+      LClosure *lcl = eris_ci_func(thread->ci); /* Uses ci->func */
+      thread->ci->func = func;
       thread->ci->u.l.base = eris_restorestackidx(thread, READ_VALUE(size_t));
       validate(thread->ci->u.l.base, thread->top);
       thread->ci->u.l.savedpc = lcl->p->code + READ_VALUE(size_t);
