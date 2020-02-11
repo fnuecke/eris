@@ -723,37 +723,3 @@ LUAMOD_API int luaopen_package (lua_State *L) {
   return 1;  /* return 'package' table */
 }
 
-
-void eris_permloadlib(lua_State *L, int forUnpersist) {
-  static const lua_CFunction searchers[] = {
-    searcher_preload,
-    searcher_Lua,
-    searcher_C,
-    searcher_Croot,
-    NULL
-  };
-  static const char *const searchernames[] = {
-    "__eris.loadlib_searcher_preload",
-    "__eris.loadlib_searcher_Lua",
-    "__eris.loadlib_searcher_C",
-    "__eris.loadlib_searcher_Croot",
-    NULL
-  };
-  int i;
-
-  luaL_checktype(L, -1, LUA_TTABLE);
-  luaL_checkstack(L, 2, NULL);
-
-  for (i = 0; searchers[i]; ++i) {
-    if (forUnpersist) {
-      lua_pushstring(L, searchernames[i]);
-      lua_pushcfunction(L, searchers[i]);
-    }
-    else {
-      lua_pushcfunction(L, searchers[i]);
-      lua_pushstring(L, searchernames[i]);
-    }
-    lua_rawset(L, -3);
-  }
-}
-

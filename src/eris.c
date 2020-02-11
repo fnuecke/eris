@@ -36,6 +36,7 @@ typedef int bool;
 #endif
 
 /* Mark us as part of the Lua core to get access to what we need. */
+#define eris_c
 #define LUA_CORE
 
 /* Public Lua headers. */
@@ -149,33 +150,6 @@ static const lua_Unsigned kMaxComplexity = 10000;
  * valid measure. */
 #define eris_savestackidx(L, p) ((p) - (L)->stack)
 #define eris_restorestackidx(L, n) ((L)->stack + (n))
-
-/* Enabled if we have a patched version of Lua (for accessing internals). */
-#if 1
-
-/* Functions in Lua libraries used to access C functions we need to add to the
- * permanents table to fully support yielded coroutines. */
-extern void eris_permbaselib(lua_State *L, int forUnpersist);
-extern void eris_permcorolib(lua_State *L, int forUnpersist);
-extern void eris_permloadlib(lua_State *L, int forUnpersist);
-extern void eris_permiolib(lua_State *L, int forUnpersist);
-extern void eris_permstrlib(lua_State *L, int forUnpersist);
-
-/* Utility macro for populating the perms table with internal C functions. */
-#define populateperms(L, forUnpersist) {\
-  eris_permbaselib(L, forUnpersist);\
-  eris_permcorolib(L, forUnpersist);\
-  eris_permloadlib(L, forUnpersist);\
-  eris_permiolib(L, forUnpersist);\
-  eris_permstrlib(L, forUnpersist);\
-}
-
-#else
-
-/* Does nothing if we don't have a patched version of Lua. */
-#define populateperms(L, forUnpersist) ((void)0)
-
-#endif
 
 /*
 ** ============================================================================

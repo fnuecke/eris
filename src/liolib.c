@@ -664,19 +664,3 @@ LUAMOD_API int luaopen_io (lua_State *L) {
   return 1;
 }
 
-
-void eris_permiolib(lua_State *L, int forUnpersist) {
-  luaL_checktype(L, -1, LUA_TTABLE);
-  luaL_checkstack(L, 2, NULL);
-
-  if (forUnpersist) {
-    lua_pushstring(L, "__eris.iolib_io_readline");
-    lua_pushcfunction(L, io_readline);
-  }
-  else {
-    lua_pushcfunction(L, io_readline);
-    lua_pushstring(L, "__eris.iolib_io_readline");
-  }
-  lua_rawset(L, -3);
-}
-
