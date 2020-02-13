@@ -355,7 +355,7 @@ LUA_API void      (lua_setallocf) (lua_State *L, lua_Alloc f, void *ud);
 
 #if defined(eris_c)
 /* Utility macro for populating the perms table with internal C functions. */
-# define eris_persist(lib, fn)\
+# define eris_persist_static(lib, fn)\
     extern lua_CFunction __perm_##lib##_##fn;\
     if (forUnpersist) {\
       lua_pushstring(L, "__eris." #lib "_" #fn);\
@@ -368,7 +368,7 @@ LUA_API void      (lua_setallocf) (lua_State *L, lua_Alloc f, void *ud);
     lua_rawset(L, -3);
 #else
 /* Utility macro to export internal C functions to eris. */
-# define eris_persist(lib, fn)\
+# define eris_persist_static(lib, fn)\
     static int fn (lua_State *L);\
     lua_CFunction __perm_##lib##_##fn = fn;
 #endif
@@ -380,30 +380,30 @@ static void populateperms(lua_State *L, bool forUnpersist)
 {
 #endif
 #if defined(eris_c) || defined(lstrlib_c)
-  eris_persist(strlib, gmatch_aux)
+  eris_persist_static(strlib, gmatch_aux)
 #endif
 #if defined(eris_c) || defined(loadlib_c)
-  eris_persist(loadlib, searcher_preload)
-  eris_persist(loadlib, searcher_Lua)
-  eris_persist(loadlib, searcher_C)
-  eris_persist(loadlib, searcher_Croot)
+  eris_persist_static(loadlib, searcher_preload)
+  eris_persist_static(loadlib, searcher_Lua)
+  eris_persist_static(loadlib, searcher_C)
+  eris_persist_static(loadlib, searcher_Croot)
 #endif
 #if defined(eris_c) || defined(liolib_c)
-  eris_persist(iolib, io_readline)
+  eris_persist_static(iolib, io_readline)
 #endif
 #if defined(eris_c) || defined(lbaselib_c)
-  eris_persist(baselib, pcallcont)
-  eris_persist(baselib, luaB_next)
-  eris_persist(baselib, ipairsaux)
+  eris_persist_static(baselib, pcallcont)
+  eris_persist_static(baselib, luaB_next)
+  eris_persist_static(baselib, ipairsaux)
 #endif
 #if defined(eris_c) || defined(lcorolib_c)
-  eris_persist(corolib, luaB_auxwrap)
+  eris_persist_static(corolib, luaB_auxwrap)
 #endif
 #if defined(eris_c)
 }
 #endif
 
-#undef eris_persist
+#undef eris_persist_static
 
 
 
