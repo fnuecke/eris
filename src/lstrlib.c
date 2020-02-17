@@ -1017,19 +1017,3 @@ LUAMOD_API int luaopen_string (lua_State *L) {
   return 1;
 }
 
-
-void eris_permstrlib(lua_State *L, int forUnpersist) {
-  luaL_checktype(L, -1, LUA_TTABLE);
-  luaL_checkstack(L, 2, NULL);
-
-  if (forUnpersist) {
-    lua_pushstring(L, "__eris.strlib_gmatch_aux");
-    lua_pushcfunction(L, gmatch_aux);
-  }
-  else {
-    lua_pushcfunction(L, gmatch_aux);
-    lua_pushstring(L, "__eris.strlib_gmatch_aux");
-  }
-  lua_rawset(L, -3);
-}
-
